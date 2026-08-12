@@ -1,4 +1,8 @@
 # Production-Grade 3-Tier AWS Architecture via Terraform
+![Terraform](https://img.shields.io/badge/Terraform-1.0%2B-623CE4?style=flat&logo=terraform)
+![AWS](https://img.shields.io/badge/AWS-3--Tier%20Architecture-232F3E?style=flat&logo=amazon-aws)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+![Security](https://img.shields.io/badge/DevSecOps-Compliant-brightgreen)
 
 > Automated, highly available, and secure 3-Tier AWS infrastructure deployment using modular Terraform and Python.
 
