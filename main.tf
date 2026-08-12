@@ -19,13 +19,13 @@ provider "aws" {
 module "vpc" {
   source = "./modules/vpc"
 
-  project_name = var.project_name
-  vpc_cidr     = var.vpc_cidr
-  public_cidrs = var.public_subnet_cidrs
-  app_cidrs    = var.app_subnet_cidrs
-  db_cidrs     = var.db_subnet_cidrs
-  azs          = var.availability_zones
-  tags         = var.tags
+  project_name        = var.project_name
+  vpc_cidr            = var.vpc_cidr
+  public_subnet_cidrs = var.public_subnet_cidrs # ← Must match variable name
+  app_subnet_cidrs    = var.app_subnet_cidrs    # ← Must match
+  db_subnet_cidrs     = var.db_subnet_cidrs     # ← Must match
+  availability_zones  = var.availability_zones  # ← Must match
+  tags                = var.tags
 }
 
 # ─── SECURITY MODULE ───

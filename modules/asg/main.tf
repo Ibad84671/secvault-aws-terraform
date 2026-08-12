@@ -1,4 +1,4 @@
-# ─── IAM ROLE FOR SSM (NO SSH) ───
+# ─── IAM ROLE FOR SSM ───
 resource "aws_iam_role" "ec2_ssm" {
   name = "${var.project_name}-ec2-ssm-role"
   assume_role_policy = jsonencode({
@@ -55,7 +55,10 @@ resource "aws_launch_template" "app" {
     http_tokens   = "required"
   }
 
-  tags = merge(var.tags, { Name = "${var.project_name}-app-instance" })
+  tag_specifications {
+    resource_type = "instance"
+    tags          = merge(var.tags, { Name = "${var.project_name}-app-instance" })
+  }
 }
 
 # ─── AUTO SCALING GROUP ───
@@ -75,13 +78,14 @@ resource "aws_autoscaling_group" "app" {
   max_size         = var.max_size
   desired_capacity = var.desired_capacity
 
-  tag {
-    key                 = "Name"
-    value               = "${var.project_name}-app-instance"
-    propagate_at_launch = true
+  dynamic "tag" {
+    for_each = var.tags
+    content {
+      key                 = tag.key
+      value               = tag.value
+      propagate_at_launch = true
+    }
   }
-
-  tags = var.tags
 }
 
 # ─── SCALING POLICIES ───
