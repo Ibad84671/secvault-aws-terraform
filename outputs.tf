@@ -30,17 +30,16 @@ output "private_db_subnet_ids" {
   description = "List of IDs for the private database tier subnets"
   value       = module.vpc.private_db_subnet_ids
 }
-
 # ==============================================================================
 # DATABASE (RDS) OUTPUTS
 # ==============================================================================
 
 output "rds_endpoint" {
   description = "The connection endpoint for the Amazon RDS MySQL instance"
-  value       = module.rds.db_instance_endpoint
+  value       = module.rds.db_endpoint
 }
 
 output "rds_address" {
   description = "The hostname address of the RDS instance"
-  value       = module.rds.db_instance_address
+  value       = module.rds.db_address
 }
