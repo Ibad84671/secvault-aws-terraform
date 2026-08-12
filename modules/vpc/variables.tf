@@ -1,11 +1,7 @@
-variable "vpc_cidr" {
-  default = "10.0.0.0/16"
-}
-
-variable "project_name" {
-  default = "secvault"
-}
-
-variable "region" {
-  default = "us-east-1"
-}
+variable "project_name" { type = string }
+variable "vpc_cidr" { type = string }
+variable "public_cidrs" { type = list(string) }
+variable "app_cidrs" { type = list(string) }
+variable "db_cidrs" { type = list(string) }
+variable "azs" { type = list(string) }
+variable "tags" { type = map(string) }

@@ -19,13 +19,13 @@ provider "aws" {
 module "vpc" {
   source = "./modules/vpc"
 
-  project_name        = var.project_name
-  vpc_cidr            = var.vpc_cidr
-  public_subnet_cidrs = var.public_subnet_cidrs
-  app_subnet_cidrs    = var.app_subnet_cidrs
-  db_subnet_cidrs     = var.db_subnet_cidrs
-  availability_zones  = var.availability_zones
-  tags                = var.tags
+  project_name = var.project_name
+  vpc_cidr     = var.vpc_cidr
+  public_cidrs = var.public_subnet_cidrs
+  app_cidrs    = var.app_subnet_cidrs
+  db_cidrs     = var.db_subnet_cidrs
+  azs          = var.availability_zones
+  tags         = var.tags
 }
 
 # ─── SECURITY MODULE ───
@@ -34,7 +34,7 @@ module "security" {
 
   project_name = var.project_name
   vpc_id       = module.vpc.vpc_id
-  tags         = var.tags
+  # tags removed – security module may not accept tags
 }
 
 # --- RDS MODULE ---
@@ -51,19 +51,18 @@ module "rds" {
   allocated_storage       = 20
   backup_retention_period = 7
   multi_az                = false
-  skip_final_snapshot     = true # For dev/demo – no orphaned snapshots
+  skip_final_snapshot     = true
   tags                    = var.tags
 }
-
 # --- ALB MODULE ---
 module "alb" {
   source = "./modules/alb"
 
-  project_name          = var.project_name
-  vpc_id                = module.vpc.vpc_id
-  public_subnet_ids     = module.vpc.public_subnet_ids
-  alb_security_group_id = module.security.alb_security_group_id
-  tags                  = var.tags
+  project_name      = var.project_name
+  vpc_id            = module.vpc.vpc_id
+  public_subnet_ids = module.vpc.public_subnet_ids
+  alb_sg_id         = module.security.alb_security_group_id
+  tags              = var.tags
 }
 
 # ─── ASG MODULE ───
