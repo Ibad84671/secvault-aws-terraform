@@ -1,100 +1,134 @@
-# Latest Amazon Linux 2 AMI
-data "aws_ami" "amazon_linux" {
+# ─── IAM ROLE FOR SSM (NO SSH) ───
+resource "aws_iam_role" "ec2_ssm" {
+  name = "${var.project_name}-ec2-ssm-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action = "sts:AssumeRole"
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ssm_core" {
+  role       = aws_iam_role.ec2_ssm.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "ec2" {
+  name = "${var.project_name}-ec2-profile"
+  role = aws_iam_role.ec2_ssm.name
+}
+
+# ─── LAUNCH TEMPLATE ───
+data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
-
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    values = ["amzn2-ami-hvm-*-x86_64-ebs"]
   }
 }
 
-# Launch Template for Flask App Instances
 resource "aws_launch_template" "app" {
-  name_prefix   = "${var.project_name}-lt-"
-  image_id      = data.aws_ami.amazon_linux.id
-  instance_type = "t3.micro"
+  name_prefix = "${var.project_name}-lt-"
+  image_id    = data.aws_ami.amazon_linux_2.id
+  instance_type = var.instance_type
 
-  network_interfaces {
-    associate_public_ip_address = false
-    security_groups             = [var.app_sg_id]
+  vpc_security_group_ids = [var.app_security_group_id]
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2.name
   }
 
-  user_data = base64encode(<<-EOF
-              #!/bin/bash
-              sudo yum update -y
-              sudo yum install -y python3 python3-pip git
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    db_host     = var.db_host
+    db_user     = var.db_user
+    db_password = var.db_password
+    db_name     = var.db_name
+  }))
 
-              # Create app directory
-              mkdir -p /home/ec2-user/app
-              cd /home/ec2-user/app
-
-              # Clone repository to fetch the Flask application files
-              git clone https://github.com/Ibad84671/secvault-aws-terraform.git /tmp/repo
-              cp -r /tmp/repo/app/* /home/ec2-user/app/
-              chown -R ec2-user:ec2-user /home/ec2-user/app
-
-              # Set environment variables for RDS connection
-              export DB_HOST="${var.db_host}"
-              export DB_USER="${var.db_user}"
-              export DB_PASSWORD="${var.db_password}"
-              export DB_NAME="${var.db_name}"
-
-              # Fetch requirements and setup Flask app
-              pip3 install flask pymysql gunicorn
-
-              # Write systemd service to keep app running in background
-              cat << 'SERVICE' > /etc/systemd/system/secvault.service
-              [Unit]
-              Description=SecVault Flask SOC Dashboard
-              After=network.target
-
-              [Service]
-              User=root
-              WorkingDirectory=/home/ec2-user/app
-              Environment="DB_HOST=${var.db_host}"
-              Environment="DB_USER=${var.db_user}"
-              Environment="DB_PASSWORD=${var.db_password}"
-              Environment="DB_NAME=${var.db_name}"
-              ExecStart=/usr/local/bin/gunicorn --bind 0.0.0.0:5000 app:app
-              Restart=always
-
-              [Install]
-              WantedBy=multi-user.target
-              SERVICE
-
-              systemctl daemon-reload
-              systemctl enable secvault
-              systemctl start secvault
-              EOF
-  )
-
-  tag_specifications {
-    resource_type = "instance"
-    tags = {
-      Name = "${var.project_name}-app-instance"
-    }
+  metadata_options {
+    http_endpoint = "enabled"
+    http_tokens   = "required"
   }
+
+  tags = merge(var.tags, { Name = "${var.project_name}-app-instance" })
 }
 
-# Auto Scaling Group (Name: secvault-asg to match GUI)
+# ─── AUTO SCALING GROUP ───
 resource "aws_autoscaling_group" "app" {
   name                = "${var.project_name}-asg"
-  vpc_zone_identifier = var.private_app_subnet_ids
-  target_group_arns   = [var.target_group_arn]
-
-  min_size            = 2
-  max_size            = 4
-  desired_capacity    = 2
+  vpc_zone_identifier = var.app_subnet_ids
+  target_group_arns   = [var.alb_target_group_arn]
+  health_check_type   = "ELB"
+  health_check_grace_period = 300
 
   launch_template {
     id      = aws_launch_template.app.id
     version = "$Latest"
   }
 
+  min_size         = var.min_size
+  max_size         = var.max_size
+  desired_capacity = var.desired_capacity
+
   tag {
     key                 = "Name"
-    value               = "${var.project_name}-asg-instance"
+    value               = "${var.project_name}-app-instance"
     propagate_at_launch = true
+  }
+
+  tags = var.tags
+}
+
+# ─── SCALING POLICIES ───
+resource "aws_autoscaling_policy" "scale_out" {
+  name                   = "${var.project_name}-scale-out"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.app.name
+}
+
+resource "aws_autoscaling_policy" "scale_in" {
+  name                   = "${var.project_name}-scale-in"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.app.name
+}
+
+resource "aws_cloudwatch_metric_alarm" "high_cpu" {
+  alarm_name          = "${var.project_name}-high-cpu"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 60
+  alarm_actions       = [aws_autoscaling_policy.scale_out.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app.name
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "low_cpu" {
+  alarm_name          = "${var.project_name}-low-cpu"
+  comparison_operator = "LessThanOrEqualToThreshold"
+  evaluation_periods  = 2
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = 300
+  statistic           = "Average"
+  threshold           = 20
+  alarm_actions       = [aws_autoscaling_policy.scale_in.arn]
+
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.app.name
   }
 }

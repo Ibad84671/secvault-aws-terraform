@@ -4,6 +4,13 @@
 *.tfstate.*
 *.tfvars
 *.tfvars.json
+.terraform.tfstate.lock.info
 
-# Keep this (Crucial for version locking)
-!.terraform.lock.hcl
+# Local development
+*.log
+*.tmp
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
