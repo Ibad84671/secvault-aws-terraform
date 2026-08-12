@@ -29,6 +29,7 @@ variable "db_user" {
 }
 
 variable "db_password" {
-  type    = string
-  default = "SecVaultPass2026!"
+  description = "Database password"
+  type        = string
+  sensitive   = true
 }
