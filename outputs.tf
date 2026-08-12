@@ -37,10 +37,10 @@ output "private_db_subnet_ids" {
 
 output "rds_endpoint" {
   description = "The connection endpoint for the Amazon RDS MySQL instance"
-  value       = module.rds.rds_endpoint
+  value       = module.rds.db_instance_endpoint
 }
 
 output "rds_address" {
   description = "The hostname address of the RDS instance"
-  value       = module.rds.rds_address
+  value       = module.rds.db_instance_address
 }
