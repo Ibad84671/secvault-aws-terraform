@@ -37,7 +37,7 @@ module "security" {
   tags         = var.tags
 }
 
-# ─── RDS MODULE ───
+# --- RDS MODULE ---
 module "rds" {
   source = "./modules/rds"
 
@@ -51,15 +51,11 @@ module "rds" {
   allocated_storage       = 20
   backup_retention_period = 7
   multi_az                = false
+  skip_final_snapshot     = true # For dev/demo – no orphaned snapshots
   tags                    = var.tags
-  module "rds" {
-    # ... existing ...
-    skip_final_snapshot = true # 🔥 For dev/demo – no orphaned snapshots
-    # ... existing ...
-  }
 }
 
-# ─── ALB MODULE ───
+# --- ALB MODULE ---
 module "alb" {
   source = "./modules/alb"
 

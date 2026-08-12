@@ -7,7 +7,6 @@ variable "db_password" {
   sensitive   = true
   description = "RDS password"
 }
-variable "db_password" { type = string }
 variable "db_instance_class" { type = string }
 variable "allocated_storage" { type = number }
 variable "backup_retention_period" {
