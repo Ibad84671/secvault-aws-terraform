@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SecVault · SOC Dashboard</title>
+    <!-- Tailwind CSS via CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome 6 (Pro-like icons) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    <!-- Chart.js v4 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <!-- Google Font (Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400;14..32,500;14..32,600;14..32,700&display=swap" rel="stylesheet">
+
+    <style>
+        /* ================================================================
+               GLOBAL RESET & DARK THEME
+            ================================================================ */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background: #0b0f14;
+            color: #e6edf3;
+            min-height: 100vh;
+            background-image: radial-gradient(circle at 20% 30%, rgba(63, 185, 80, 0.03) 0%, transparent 60%),
+                radial-gradient(circle at 80% 70%, rgba(88, 166, 255, 0.04) 0%, transparent 50%);
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #0d1117; }
+        ::-webkit-scrollbar-thumb { background: #30363d; border-radius: 8px; }
+        ::-webkit-scrollbar-thumb:hover { background: #58a6ff; }
+
+        /* ================================================================
+               GLASSMORPHISM CARD
+            ================================================================ */
+        .glass {
+            background: rgba(22, 27, 34, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(48, 54, 61, 0.5);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            transition: all 0.25s ease;
+        }
+        .glass:hover {
+            border-color: rgba(88, 166, 255, 0.3);
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6), 0 0 15px rgba(88, 166, 255, 0.05);
+        }
+
+        /* ================================================================
+               METRIC CARDS
+            ================================================================ */
+        .metric-card {
+            position: relative;
+            overflow: hidden;
+            padding: 1.25rem 1.5rem;
+            background: rgba(22, 27, 34, 0.6);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(48, 54, 61, 0.4);
+            border-radius: 14px;
+            transition: all 0.3s ease;
+            cursor: default;
+        }
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(63, 185, 80, 0.02), rgba(88, 166, 255, 0.02));
+            border-radius: 14px;
+            pointer-events: none;
+        }
+        .metric-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(63, 185, 80, 0.3);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+        }
+        .metric-icon {
+            font-size: 1.4rem;
+            width: 2.6rem;
+            height: 2.6rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #e6edf3 0%, #c9d1d9 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* ================================================================
+               STATUS BADGE
+            ================================================================ */
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px 6px 12px;
+            border-radius: 100px;
+            background: rgba(63, 185, 80, 0.12);
+            border: 1px solid rgba(63, 185, 80, 0.3);
+            color: #3fb950;
+            font-weight: 500;
+            font-size: 0.8rem;
+            letter-spacing: 0.3px;
+            backdrop-filter: blur(4px);
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #3fb950;
+            box-shadow: 0 0 10px #3fb950;
+            animation: pulse-dot 1.8s ease-in-out infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.7); }
+        }
+
+        /* ================================================================
+               TABLE
+            ================================================================ */
+        .incident-table th {
+            background: rgba(13, 17, 23, 0.6);
+            border-bottom: 2px solid #30363d;
+            padding: 10px 14px;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #8b949e;
+        }
+        .incident-table td {
+            padding: 10px 14px;
+            border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+            font-size: 0.875rem;
+        }
+        .incident-table tr {
+            transition: background 0.15s;
+        }
+        .incident-table tr:hover {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .severity-badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 100px;
+            font-weight: 600;
+            font-size: 0.7rem;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+        }
+        .severity-critical { background: rgba(248, 81, 73, 0.2); color: #f85149; border: 1px solid rgba(248,81,73,0.3); }
+        .severity-high    { background: rgba(240, 136, 62, 0.2); color: #f0883e; border: 1px solid rgba(240,136,62,0.3); }
+        .severity-medium  { background: rgba(210, 153, 34, 0.2); color: #d29922; border: 1px solid rgba(210,153,34,0.3); }
+        .severity-low     { background: rgba(63, 185, 80, 0.15); color: #3fb950; border: 1px solid rgba(63,185,80,0.3); }
+
+        /* ================================================================
+               SEARCH & BUTTONS
+            ================================================================ */
+        .search-input {
+            background: rgba(13, 17, 23, 0.7);
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 8px 16px;
+            color: #e6edf3;
+            font-size: 0.875rem;
+            transition: all 0.2s;
+            min-width: 200px;
+            backdrop-filter: blur(4px);
+        }
+        .search-input:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+        }
+        .search-input::placeholder {
+            color: #6e7681;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #58a6ff 0%, #1f6feb 100%);
+            color: #0d1117;
+            font-weight: 600;
+            padding: 8px 20px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+        }
+        .btn-primary:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 20px rgba(88, 166, 255, 0.3);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #f85149 0%, #da3633 100%);
+            color: #0d1117;
+            font-weight: 600;
+            padding: 8px 20px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.875rem;
+        }
+        .btn-danger:hover {
+            transform: scale(1.02);
+            box-shadow: 0 4px 20px rgba(248, 81, 73, 0.3);
+        }
+
+        /* ================================================================
+               MODAL (Glassmorphism)
+            ================================================================ */
+        .modal-overlay {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            position: fixed;
+            inset: 0;
+            z-index: 1000;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal-content {
+            background: rgba(22, 27, 34, 0.9);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(48, 54, 61, 0.6);
+            border-radius: 24px;
+            padding: 2rem 2.5rem;
+            max-width: 520px;
+            width: 90%;
+            box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8);
+            transform: scale(0.95);
+            transition: transform 0.25s ease, opacity 0.25s ease;
+            opacity: 0;
+        }
+        .modal-overlay.active .modal-content {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        .form-input {
+            background: rgba(13, 17, 23, 0.8);
+            border: 1px solid #30363d;
+            border-radius: 10px;
+            padding: 10px 14px;
+            color: #e6edf3;
+            width: 100%;
+            transition: border 0.2s;
+            font-size: 0.9rem;
+        }
+        .form-input:focus {
+            outline: none;
+            border-color: #58a6ff;
+            box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
+        }
+        .form-label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #8b949e;
+            margin-bottom: 4px;
+        }
+
+        /* ================================================================
+               CHART CONTAINERS
+            ================================================================ */
+        .chart-box {
+            background: rgba(13, 17, 23, 0.4);
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(48, 54, 61, 0.3);
+            border-radius: 14px;
+            padding: 1.25rem;
+            transition: border-color 0.3s;
+        }
+        .chart-box:hover {
+            border-color: rgba(88, 166, 255, 0.2);
+        }
+
+        /* ================================================================
+               RESPONSIVE TWEAKS
+            ================================================================ */
+        @media (max-width: 640px) {
+            .metric-value { font-size: 1.5rem; }
+            .modal-content { padding: 1.5rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ================================================================
+    TOP NAVBAR
+    ================================================================ -->
+    <header class="sticky top-0 z-50 bg-[#0b0f14]/80 backdrop-blur-xl border-b border-[#30363d] px-6 py-3 flex items-center justify-between flex-wrap gap-3">
+        <div class="flex items-center gap-3">
+            <i class="fas fa-shield-halved text-[#3fb950] text-2xl"></i>
+            <span class="font-bold text-xl tracking-tight text-white">SecVault</span>
+            <span class="text-xs text-[#8b949e] font-medium hidden sm:inline">· Incident Log Vault</span>
+        </div>
+        <div class="flex items-center gap-4">
+            <div class="status-badge">
+                <span class="status-dot"></span>
+                <span class="text-sm">3‑Tier AWS Live · RDS Connected</span>
+            </div>
+            <div class="flex items-center gap-2 text-sm text-[#8b949e] font-mono">
+                <i class="fas fa-clock"></i>
+                <span id="clock">--:--:--</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- ================================================================
+    MAIN CONTENT
+    ================================================================ -->
+    <main class="max-w-7xl mx-auto p-6 space-y-6">
+
+        <!-- ====== METRICS ROW ====== -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="metric-card">
+                <div class="flex items-center justify-between">
+                    <span class="text-[#8b949e] text-sm font-medium">Total Incidents</span>
+                    <div class="metric-icon text-[#58a6ff]"><i class="fas fa-database"></i></div>
+                </div>
+                <div class="metric-value mt-1" id="totalLogs">--</div>
+                <div class="text-xs text-[#6e7681] mt-1 flex items-center gap-1">
+                    <i class="fas fa-arrow-up text-[#3fb950]"></i>
+                    <span id="logsLast24">0</span> in last 24h
+                </div>
+            </div>
+            <div class="metric-card">
+                <div class="flex items-center justify-between">
+                    <span class="text-[#8b949e] text-sm font-medium">Critical Alerts</span>
+                    <div class="metric-icon text-[#f85149]"><i class="fas fa-exclamation-triangle"></i></div>
+                </div>
+                <div class="metric-value text-[#f85149]" id="criticalCount">--</div>
+                <div class="text-xs text-[#6e7681] mt-1">High: <span id="highCount" class="text-[#f0883e]">--</span></div>
+            </div>
+            <div class="metric-card">
+                <div class="flex items-center justify-between">
+                    <span class="text-[#8b949e] text-sm font-medium">Active App Nodes</span>
+                    <div class="metric-icon text-[#3fb950]"><i class="fas fa-server"></i></div>
+                </div>
+                <div class="metric-value">2</div>
+                <div class="text-xs text-[#6e7681] mt-1"><i class="fas fa-sync-alt text-[#3fb950]"></i> ASG: secvault-asg</div>
+            </div>
+            <div class="metric-card">
+                <div class="flex items-center justify-between">
+                    <span class="text-[#8b949e] text-sm font-medium">DB Latency</span>
+                    <div class="metric-icon text-[#d29922]"><i class="fas fa-database"></i></div>
+                </div>
+                <div class="metric-value text-[#d29922]" id="dbLatency">--</div>
+                <div class="text-xs text-[#6e7681] mt-1">avg response time</div>
+            </div>
+        </section>
+
+        <!-- ====== CHARTS ROW ====== -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="chart-box">
+                <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                    <i class="fas fa-chart-pie text-[#58a6ff]"></i> Incidents by Severity
+                </h3>
+                <canvas id="severityPieChart" height="200"></canvas>
+            </div>
+            <div class="chart-box">
+                <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                    <i class="fas fa-chart-line text-[#3fb950]"></i> Threat Traffic (7‑Day Trend)
+                </h3>
+                <canvas id="threatLineChart" height="200"></canvas>
+            </div>
+        </section>
+
+        <!-- ====== INCIDENT TABLE ====== -->
+        <section class="glass overflow-hidden">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 gap-3 border-b border-[#30363d]">
+                <h2 class="text-lg font-semibold text-white flex items-center gap-2">
+                    <i class="fas fa-list-ul text-[#58a6ff]"></i> Incident Log Vault
+                </h2>
+                <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+                    <input type="text" id="searchInput" class="search-input flex-1 sm:flex-initial" placeholder="Search incidents..." oninput="filterTable()">
+                    <button id="openModalBtn" class="btn-primary text-sm">
+                        <i class="fas fa-plus"></i> Inject Alert
+                    </button>
+                    <button id="refreshBtn" class="btn-primary text-sm">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm incident-table" id="incidentTable">
+                    <thead>
+                        <tr>
+                            <th>Severity</th>
+                            <th>ID</th>
+                            <th>Source</th>
+                            <th>Type</th>
+                            <th>Title</th>
+                            <th>Source IP</th>
+                            <th>User</th>
+                            <th>Time</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="incidentTableBody">
+                        <tr><td colspan="9" class="text-center py-12 text-[#6e7681]">Loading incidents…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="flex items-center justify-between px-4 py-3 border-t border-[#30363d] text-xs text-[#8b949e] bg-[#0d1117]/30">
+                <span id="rowCount">0 rows</span>
+                <span id="dataSourceBadge" class="px-3 py-1 rounded-full bg-[#0d1117] border border-[#30363d]">
+                    <i class="fas fa-database mr-1"></i> Source: <span id="sourceLabel">RDS</span>
+                </span>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ================================================================
+    MODAL – Simulated Alert Injector (Glassmorphism)
+    ================================================================ -->
+    <div id="modalOverlay" class="modal-overlay">
+        <div class="modal-content">
+            <div class="flex items-center justify-between mb-5">
+                <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                    <i class="fas fa-bolt text-[#f85149]"></i> Inject Security Alert
+                </h3>
+                <button id="closeModalBtn" class="text-[#8b949e] hover:text-white text-xl">&times;</button>
+            </div>
+            <form id="injectForm" class="space-y-4">
+                <div>
+                    <label class="form-label">Severity</label>
+                    <select id="sevSelect" class="form-input">
+                        <option value="Critical">Critical</option>
+                        <option value="High" selected>High</option>
+                        <option value="Medium">Medium</option>
+                        <option value="Low">Low</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label">Incident Type</label>
+                    <input id="typeInput" class="form-input" placeholder="e.g. SSH Brute Force" value="Test Injection">
+                </div>
+                <div>
+                    <label class="form-label">Title</label>
+                    <input id="titleInput" class="form-input" placeholder="Brief title" value="Unauthorized access attempt">
+                </div>
+                <div>
+                    <label class="form-label">Source IP</label>
+                    <input id="ipInput" class="form-input" placeholder="e.g. 192.168.1.100" value="203.0.113.45">
+                </div>
+                <div>
+                    <label class="form-label">Description</label>
+                    <textarea id="descInput" class="form-input" rows="2" placeholder="Details">Simulated security event for SOC demo.</textarea>
+                </div>
+                <div id="injectResult" class="text-sm hidden"></div>
+                <div class="flex gap-3 justify-end pt-2">
+                    <button type="button" id="closeModalBtn2" class="text-[#8b949e] hover:text-white text-sm">Cancel</button>
+                    <button type="submit" class="btn-danger text-sm">
+                        <i class="fas fa-skull"></i> Inject Alert
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================================================================
+    JAVASCRIPT
+    ================================================================ -->
+    <script>
+        // ================================================================
+        // 1. STATE
+        // ================================================================
+        let incidents = [];
+        let severityChart = null;
+        let threatChart = null;
+        let updateInterval = null;
+
+        // ================================================================
+        // 2. CLOCK
+        // ================================================================
+        function updateClock() {
+            document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-US', { hour12: false });
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // ================================================================
+        // 3. FETCH INCIDENTS
+        // ================================================================
+        async function fetchIncidents() {
+            try {
+                const res = await fetch('/api/v1/logs');
+                const data = await res.json();
+                if (data.status === 'success') {
+                    incidents = data.logs || [];
+                    document.getElementById('sourceLabel').textContent = data.source.toUpperCase();
+                    renderMetrics();
+                    renderTable();
+                    updateCharts();
+                } else {
+                    throw new Error('API error');
+                }
+            } catch (e) {
+                console.error('Fetch failed:', e);
+                document.getElementById('incidentTableBody').innerHTML =
+                    `<tr><td colspan="9" class="text-center py-8 text-[#f85149]">⚠️ Failed to load data. Check backend.</td></tr>`;
+            }
+        }
+
+        // ================================================================
+        // 4. RENDER METRICS
+        // ================================================================
+        function renderMetrics() {
+            const total = incidents.length;
+            const critical = incidents.filter(i => i.severity === 'Critical').length;
+            const high = incidents.filter(i => i.severity === 'High').length;
+            document.getElementById('totalLogs').textContent = total;
+            document.getElementById('criticalCount').textContent = critical;
+            document.getElementById('highCount').textContent = high;
+
+            const now = new Date();
+            const last24 = incidents.filter(i => (now - new Date(i.created_at)) < 24*60*60*1000).length;
+            document.getElementById('logsLast24').textContent = last24;
+
+            // Simulated DB latency (2–15 ms)
+            document.getElementById('dbLatency').textContent = (Math.random() * 13 + 2).toFixed(1);
+        }
+
+        // ================================================================
+        // 5. RENDER TABLE
+        // ================================================================
+        function renderTable(filter = '') {
+            const tbody = document.getElementById('incidentTableBody');
+            const search = filter.toLowerCase().trim();
+            let filtered = search ? incidents.filter(i =>
+                (i.title || '').toLowerCase().includes(search) ||
+                (i.incident_id || '').toLowerCase().includes(search) ||
+                (i.source_ip || '').includes(search) ||
+                (i.username || '').toLowerCase().includes(search)
+            ) : incidents;
+
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="9" class="text-center py-8 text-[#6e7681]">No incidents found</td></tr>`;
+                document.getElementById('rowCount').textContent = '0 rows';
+                return;
+            }
+
+            let html = '';
+            filtered.forEach(i => {
+                const sev = i.severity || 'Low';
+                const sevClass = sev.toLowerCase();
+                const timeAgo = timeSince(new Date(i.created_at));
+                html += `
+                    <tr>
+                        <td><span class="severity-badge severity-${sevClass}">${sev}</span></td>
+                        <td><span class="font-mono text-xs text-[#8b949e]">${i.incident_id || 'N/A'}</span></td>
+                        <td>${i.source_system || '-'}</td>
+                        <td>${i.incident_type || '-'}</td>
+                        <td class="max-w-[140px] truncate" title="${i.title || ''}">${i.title || '-'}</td>
+                        <td><span class="font-mono text-xs">${i.source_ip || '-'}</span></td>
+                        <td>${i.username || '-'}</td>
+                        <td class="text-xs text-[#8b949e]">${timeAgo}</td>
+                        <td class="text-center">
+                            <button class="text-[#8b949e] hover:text-white transition" title="View details"><i class="fas fa-eye"></i></button>
+                            <button class="text-[#8b949e] hover:text-[#3fb950] ml-2 transition" title="Mark reviewed"><i class="fas fa-check-circle"></i></button>
+                        </td>
+                    </tr>
+                `;
+            });
+            tbody.innerHTML = html;
+            document.getElementById('rowCount').textContent = `${filtered.length} rows`;
+        }
+
+        function timeSince(date) {
+            const sec = Math.floor((Date.now() - date) / 1000);
+            if (sec < 5) return 'Just now';
+            const intervals = [
+                [60, 's'], [60, 'm'], [24, 'h'], [7, 'd'], [30, 'mo'], [12, 'y']
+            ];
+            let val = sec, unit = 's';
+            for (const [div, lbl] of intervals) {
+                if (val < div) break;
+                val = Math.floor(val / div);
+                unit = lbl;
+            }
+            return `${val}${unit}`;
+        }
+
+        function filterTable() {
+            renderTable(document.getElementById('searchInput').value);
+        }
+
+        // ================================================================
+        // 6. CHARTS (with gradients)
+        // ================================================================
+        function updateCharts() {
+            // --- Pie Chart (Severity) ---
+            const sevMap = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+            incidents.forEach(i => {
+                const s = i.severity || 'Low';
+                if (sevMap[s] !== undefined) sevMap[s]++;
+            });
+            const labels = ['Critical', 'High', 'Medium', 'Low'];
+            const data = labels.map(l => sevMap[l]);
+            const colors = ['#f85149', '#f0883e', '#d29922', '#3fb950'];
+
+            if (severityChart) {
+                severityChart.data.datasets[0].data = data;
+                severityChart.update();
+            } else {
+                const ctx = document.getElementById('severityPieChart').getContext('2d');
+                severityChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            data: data,
+                            backgroundColor: colors,
+                            borderColor: '#0d1117',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                labels: { color: '#c9d1d9', font: { size: 11 } }
+                            }
+                        }
+                    }
+                });
+            }
+
+            // --- Line Chart (7-day trend based on real timestamps) ---
+            const now = new Date();
+            const days = [];
+            const counts = [];
+            for (let i = 6; i >= 0; i--) {
+                const d = new Date(now);
+                d.setDate(d.getDate() - i);
+                days.push(d.toLocaleDateString('en-US', { weekday: 'short' }));
+                const start = new Date(d);
+                start.setHours(0,0,0,0);
+                const end = new Date(d);
+                end.setHours(23,59,59,999);
+                const cnt = incidents.filter(inc => {
+                    const t = new Date(inc.created_at);
+                    return t >= start && t <= end;
+                }).length;
+                counts.push(cnt);
+            }
+
+            if (threatChart) {
+                threatChart.data.datasets[0].data = counts;
+                threatChart.update();
+            } else {
+                const ctx2 = document.getElementById('threatLineChart').getContext('2d');
+                const gradient = ctx2.createLinearGradient(0, 0, 0, 200);
+                gradient.addColorStop(0, 'rgba(63, 185, 80, 0.3)');
+                gradient.addColorStop(1, 'rgba(63, 185, 80, 0.0)');
+
+                threatChart = new Chart(ctx2, {
+                    type: 'line',
+                    data: {
+                        labels: days,
+                        datasets: [{
+                            label: 'Incidents',
+                            data: counts,
+                            borderColor: '#3fb950',
+                            backgroundColor: gradient,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: '#3fb950',
+                            pointBorderColor: '#0d1117',
+                            pointBorderWidth: 1,
+                            pointRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                labels: { color: '#c9d1d9', font: { size: 11 } }
+                            }
+                        },
+                        scales: {
+                            x: { ticks: { color: '#8b949e', font: { size: 10 } } },
+                            y: { ticks: { color: '#8b949e', font: { size: 10 } }, beginAtZero: true }
+                        }
+                    }
+                });
+            }
+        }
+
+        // ================================================================
+        // 7. MODAL CONTROLS
+        // ================================================================
+        const overlay = document.getElementById('modalOverlay');
+        const openBtn = document.getElementById('openModalBtn');
+        const closeBtns = [document.getElementById('closeModalBtn'), document.getElementById('closeModalBtn2')];
+
+        function openModal() { overlay.classList.add('active'); }
+        function closeModal() { overlay.classList.remove('active'); document.getElementById('injectResult').classList.add('hidden'); }
+
+        openBtn.addEventListener('click', openModal);
+        closeBtns.forEach(btn => btn.addEventListener('click', closeModal));
+        overlay.addEventListener('click', (e) => { if (e.target === overlay) closeModal(); });
+
+        // ================================================================
+        // 8. SUBMIT INJECTION
+        // ================================================================
+        document.getElementById('injectForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                severity: document.getElementById('sevSelect').value,
+                incident_type: document.getElementById('typeInput').value || 'Test',
+                title: document.getElementById('titleInput').value || 'Simulated Event',
+                source_ip: document.getElementById('ipInput').value || '0.0.0.0',
+                description: document.getElementById('descInput').value || '',
+                source_system: 'ui-injector',
+                username: 'analyst'
+            };
+
+            const res = await fetch('/api/v1/logs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            const result = await res.json();
+            const msgDiv = document.getElementById('injectResult');
+            msgDiv.classList.remove('hidden');
+            if (res.status === 201) {
+                msgDiv.innerHTML = `<span class="text-[#3fb950]">✅ ${result.message} (ID: ${result.incident_id || 'N/A'})</span>`;
+                await fetchIncidents();
+                // Clear form
+                document.getElementById('typeInput').value = '';
+                document.getElementById('titleInput').value = '';
+                document.getElementById('ipInput').value = '';
+                document.getElementById('descInput').value = '';
+                setTimeout(closeModal, 1200);
+            } else {
+                msgDiv.innerHTML = `<span class="text-[#f85149]">❌ Failed: ${result.error || 'Unknown error'}</span>`;
+            }
+        });
+
+        // ================================================================
+        // 9. REFRESH & AUTO-UPDATE
+        // ================================================================
+        document.getElementById('refreshBtn').addEventListener('click', fetchIncidents);
+
+        // Initial load
+        fetchIncidents();
+
+        // Auto-refresh every 30 seconds
+        setInterval(fetchIncidents, 30000);
+    </script>
+</body>
+</html>
