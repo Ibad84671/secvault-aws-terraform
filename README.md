@@ -30,7 +30,7 @@ flowchart TD
 
     ALB -->|Forward Traffic :5000| ASG
     ASG -->|Outbound DB Traffic :3306| RDS
-    ASG -->|Outbound Internet Updates| NAT --> IGW
+    ASG -->|Outbound Internet Updates| NAT --> IGW '''
 
 Step-by-Step Deployment Guide
 Follow these steps to deploy this 3-tier AWS architecture in your own AWS account using Terraform.
@@ -46,7 +46,7 @@ Git installed.
 
 📥 1. Clone the Repository
 Bash
-git clone https://github.com/Ibad84671/secvault-aws-terraform.git
+git clone [https://github.com/Ibad84671/secvault-aws-terraform.git](https://github.com/Ibad84671/secvault-aws-terraform.git)
 cd secvault-aws-terraform
 ⚙️ 2. Configure Environment Variables
 Create a terraform.tfvars file in the root directory to supply your database secrets safely (do not commit this file):
