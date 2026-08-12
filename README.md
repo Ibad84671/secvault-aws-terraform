@@ -35,3 +35,24 @@ flowchart TD
     ALB -->|Forward Traffic :5000| ASG
     ASG -->|Outbound DB Traffic :3306| RDS
     ASG -->|Outbound Internet Updates| NAT --> IGW
+
+
+---
+
+## 🚀 Step-by-Step Deployment Guide
+
+Follow these steps to deploy this 3-tier AWS architecture in your own AWS account using Terraform.
+
+### 📋 Prerequisites
+
+Before you begin, ensure you have the following installed and configured:
+1. **AWS CLI** configured with your credentials (`aws configure`).
+2. **Terraform CLI** (v1.0+) installed.
+3. **Git** installed.
+
+---
+
+### 📥 1. Clone the Repository
+
+```bash
+git clone https://github.com/Ibad84671/secvault-aws-terraform.git
