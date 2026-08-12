@@ -1,13 +1,12 @@
-# Contributing Guidelines
+# Contributing to SecVault
 
-Thank you for considering contributing to the **`secvault-aws-terraform`** project!
+First off, thank you for considering contributing! 🎉
 
-## Development Workflow
+## Development Process
 
-To maintain infrastructure quality and prevent broken states, please adhere to the following workflow:
+### 1. Fork the Repository
+Fork the repository and clone your fork locally.
 
-### 1. Fork & Clone
-- Fork this repository on GitHub.
-- Clone your fork locally:
- ```bash
-git clone [https://github.com/](https://github.com/)<your-username>/secvault-aws-terraform.git
+```bash
+git clone https://github.com/your-username/secvault-aws-terraform.git
+cd secvault-aws-terraform

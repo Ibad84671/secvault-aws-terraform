@@ -2,25 +2,31 @@
 
 ## Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 1.0.x   | :white_check_mark: |
-
-## Security Architecture & Best Practices
-
-This project implements the following security baselines:
-
-- **Network Isolation:** Compute (ASG) and Database (RDS) resources are deployed inside private subnets without direct public IP addresses.
-- **Least Privilege Access:** Security Groups restrict incoming traffic explicitly (ALB $\rightarrow$ App $\rightarrow$ Database).
-- **Secrets Management:** Sensitive variables are passed via variables (`*.tfvars`) which are explicitly excluded from Git tracking via `.gitignore`.
-- **Infrastructure State Security:** Local state files containing sensitive resource metadata are excluded from version control.
+| Version | Supported |
+|---------|-----------|
+| 1.x     | ✅ |
 
 ## Reporting a Vulnerability
 
-If you discover a potential security vulnerability within this repository or infrastructure code, please **do not create a public GitHub issue**.
+**Security is a top priority.** If you discover a vulnerability:
 
-Instead, please report it via one of the following methods:
-1. Contact the maintainer directly via GitHub profile.
-2. Email: `ibad84671@gmail.com`
+1. **DO NOT** create a public GitHub issue
+2. Email: [ibad84671@gmail.com](mailto:ibad84671@gmail.com)
+3. Include: Description, Steps to Reproduce, Potential Impact
+4. Expect response within 48 hours
 
-Vulnerabilities will be addressed promptly.
+## Security Controls in Place
+
+- ✅ **Secrets Manager** – DB credentials never in code or user_data
+- ✅ **SSM Session Manager** – No SSH, no public port 22
+- ✅ **Security Group Chaining** – ALB SG → App SG → DB SG
+- ✅ **Private Subnets** – App & DB tiers have no public IPs
+- ✅ **Encryption at Rest** – RDS encrypted with KMS
+- ✅ **IMDSv2** – Enforced on EC2 instances
+- ✅ **Terraform Security Scanning** – Checkov + tfsec in CI pipeline
+
+## Security Architecture
+
+## Responsible Disclosure
+
+We follow responsible disclosure practices. Vulnerabilities are fixed within 14 days of confirmation.

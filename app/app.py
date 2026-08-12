@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 DB_HOST = os.getenv('DB_HOST', 'localhost')
 DB_USER = os.getenv('DB_USER', 'admin')
-DB_PASS = os.getenv('DB_PASSWORD', 'password123')
+DB_PASS = os.getenv('DB_PASSWORD')
 DB_NAME = os.getenv('DB_NAME', 'secops_db')
 
 mock_logs = [

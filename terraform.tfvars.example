@@ -1,0 +1,19 @@
+# terraform.tfvars.example
+# Copy this file to terraform.tfvars and update values
+
+aws_region          = "us-east-1"
+environment         = "prod"
+project_name        = "secvault"
+
+# VPC CIDR
+vpc_cidr            = "10.0.0.0/16"
+
+# RDS Configuration
+db_name             = "secvault"
+db_username         = "dbadmin"
+db_password         = "YourSecurePassword123!"  # Change this!
+
+# Auto Scaling
+asg_desired_capacity = 2
+asg_min_size         = 1
+asg_max_size         = 4
