@@ -34,7 +34,7 @@ module "security" {
 
   project_name = var.project_name
   vpc_id       = module.vpc.vpc_id
-  # tags removed – security module may not accept tags
+  tags         = var.tags
 }
 
 # --- RDS MODULE ---
@@ -42,9 +42,9 @@ module "rds" {
   source = "./modules/rds"
 
   project_name            = var.project_name
-  db_subnet_ids           = module.vpc.db_subnet_ids
-  db_security_group_id    = module.security.db_security_group_id
-  db_name                 = var.db_name # ← This line is the problem
+  db_subnet_ids           = module.vpc.db_subnet_ids             # ← This must match VPC output
+  db_security_group_id    = module.security.db_security_group_id # ← This must match Security output
+  db_name                 = var.db_name
   db_username             = var.db_username
   db_password             = var.db_password
   db_instance_class       = var.db_instance_class
@@ -61,7 +61,7 @@ module "alb" {
   project_name      = var.project_name
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
-  alb_sg_id         = module.security.alb_security_group_id
+  alb_sg_id         = module.security.alb_security_group_id # ← Match Security output
   tags              = var.tags
 }
 
@@ -71,7 +71,7 @@ module "asg" {
 
   project_name          = var.project_name
   app_subnet_ids        = module.vpc.app_subnet_ids
-  app_security_group_id = module.security.app_security_group_id
+  app_security_group_id = module.security.app_security_group_id # ← Match Security output
   alb_target_group_arn  = module.alb.target_group_arn
   instance_type         = "t3.micro"
   min_size              = 1
