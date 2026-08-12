@@ -31,54 +31,79 @@ flowchart TD
     ALB -->|Forward Traffic :5000| ASG
     ASG -->|Outbound DB Traffic :3306| RDS
     ASG -->|Outbound Internet Updates| NAT --> IGW
-    
-    🚀 Step-by-Step Deployment Guide
+```
+
+---
+
+## 🚀 Step-by-Step Deployment Guide
+
 Follow these steps to deploy this 3-tier AWS architecture in your own AWS account using Terraform.
 
-📋 Prerequisites
+### 📋 Prerequisites
+
 Before you begin, ensure you have the following installed and configured:
+1. **AWS CLI** configured with your credentials (`aws configure`).
+2. **Terraform CLI** (v1.0+) installed.
+3. **Git** installed.
 
-AWS CLI configured with your credentials (aws configure).
+---
 
-Terraform CLI (v1.0+) installed.
+### 📥 1. Clone the Repository
 
-Git installed.
-
-📥 1. Clone the Repository
-Bash
+```bash
 git clone https://github.com/Ibad84671/secvault-aws-terraform.git
 cd secvault-aws-terraform
-⚙️ 2. Configure Environment Variables
-Create a terraform.tfvars file in the root directory to supply your database secrets safely (do not commit this file):
+```
 
-Terraform
+---
+
+### ⚙️ 2. Configure Environment Variables
+
+Create a `terraform.tfvars` file in the root directory to supply your database secrets safely (do not commit this file):
+
+```hcl
 db_username = "admin"
 db_password = "YourSecurePassword123!"
-🏗️ 3. Initialize & Deploy Infrastructure
-Initialize Terraform working directory:
+```
 
-Bash
-terraform init
-Validate configuration & check plan:
+---
 
-Bash
-terraform validate
-terraform plan
-Apply and provision resources on AWS:
+### 🏗️ 3. Initialize & Deploy Infrastructure
 
-Bash
-terraform apply
-(Type yes when prompted to confirm deployment)
+1. **Initialize Terraform working directory:**
+   ```bash
+   terraform init
+   ```
 
-🌐 4. Access the Application
-Once terraform apply finishes, copy the alb_dns_name output from your terminal and open it in your web browser:
+2. **Validate configuration & check plan:**
+   ```bash
+   terraform validate
+   terraform plan
+   ```
 
-Plaintext
+3. **Apply and provision resources on AWS:**
+   ```bash
+   terraform apply
+   ```
+   *(Type `yes` when prompted to confirm deployment)*
+
+---
+
+### 🌐 4. Access the Application
+
+Once `terraform apply` finishes, copy the `alb_dns_name` output from your terminal and open it in your web browser:
+
+```text
 http://<alb_dns_name>
-🧹 5. Destroy & Clean Up Resources
+```
+
+---
+
+### 🧹 5. Destroy & Clean Up Resources
+
 To avoid ongoing AWS charges after testing, destroy all provisioned infrastructure:
 
-Bash
+```bash
 terraform destroy
-(Type yes when prompted to confirm cleanup)
-'@; [System.IO.File]::WriteAllText('README.md', $c)"
+```
+*(Type `yes` when prompted to confirm cleanup)*
