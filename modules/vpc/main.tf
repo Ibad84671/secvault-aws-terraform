@@ -104,3 +104,34 @@ resource "aws_route_table_association" "pub_2" {
   subnet_id      = aws_subnet.public_2.id
   route_table_id = aws_route_table.public.id
 }
+
+# --- NAT Gateway for Private Subnet Connectivity ---
+
+# 1. Allocate Elastic IP for NAT
+resource "aws_eip" "nat_eip" {
+  domain = "vpc"
+}
+
+# 2. Create NAT Gateway
+resource "aws_nat_gateway" "nat" {
+  allocation_id = aws_eip.nat_eip.id
+  subnet_id     = aws_subnet.public[0].id # Public subnet mein NAT rahega
+  tags = { Name = "secvault-nat" }
+}
+
+# 3. Create Private Route Table
+resource "aws_route_table" "private" {
+  vpc_id = aws_vpc.main.id
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.nat.id
+  }
+  tags = { Name = "secvault-private-rt" }
+}
+
+# 4. Associate Private Subnets with Private Route Table
+resource "aws_route_table_association" "private" {
+  count          = length(aws_subnet.private)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private.id
+}
