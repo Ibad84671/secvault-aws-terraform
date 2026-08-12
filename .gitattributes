@@ -1,0 +1,3 @@
+# Ignore HTML/App frontend from GitHub language stats so Terraform (HCL) stays dominant
+*.html linguist-detectable=false
+app/** linguist-vendored

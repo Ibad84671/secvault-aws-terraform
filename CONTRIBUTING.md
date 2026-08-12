@@ -9,5 +9,5 @@ To maintain infrastructure quality and prevent broken states, please adhere to t
 ### 1. Fork & Clone
 - Fork this repository on GitHub.
 - Clone your fork locally:
-  ```cmd
-  git clone [https://github.com/](https://github.com/)<your-username>/secvault-aws-terraform.git
+ ```bash
+git clone [https://github.com/](https://github.com/)<your-username>/secvault-aws-terraform.git
