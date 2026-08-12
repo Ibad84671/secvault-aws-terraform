@@ -4,9 +4,9 @@ resource "aws_iam_role" "ec2_ssm" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Effect = "Allow"
+      Effect    = "Allow"
       Principal = { Service = "ec2.amazonaws.com" }
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
   tags = var.tags
@@ -33,8 +33,8 @@ data "aws_ami" "amazon_linux_2" {
 }
 
 resource "aws_launch_template" "app" {
-  name_prefix = "${var.project_name}-lt-"
-  image_id    = data.aws_ami.amazon_linux_2.id
+  name_prefix   = "${var.project_name}-lt-"
+  image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = var.instance_type
 
   vpc_security_group_ids = [var.app_security_group_id]
@@ -60,10 +60,10 @@ resource "aws_launch_template" "app" {
 
 # ─── AUTO SCALING GROUP ───
 resource "aws_autoscaling_group" "app" {
-  name                = "${var.project_name}-asg"
-  vpc_zone_identifier = var.app_subnet_ids
-  target_group_arns   = [var.alb_target_group_arn]
-  health_check_type   = "ELB"
+  name                      = "${var.project_name}-asg"
+  vpc_zone_identifier       = var.app_subnet_ids
+  target_group_arns         = [var.alb_target_group_arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   launch_template {

@@ -36,9 +36,6 @@ resource "aws_db_instance" "mysql" {
 
   publicly_accessible = false
 
-  # ─── FINAL SNAPSHOT ───
-  skip_final_snapshot = false
-  final_snapshot_identifier = "${var.project_name}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-
-  tags = merge(var.tags, { Name = "${var.project_name}-rds" })
-}
+ # --- FINAL SNAPSHOT ---
+skip_final_snapshot = var.skip_final_snapshot
+final_snapshot_identifier = var.skip_final_snapshot ? null : "${var.project_name}-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"

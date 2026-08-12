@@ -2,7 +2,11 @@ variable "project_name" { type = string }
 variable "db_subnet_ids" { type = list(string) }
 variable "db_security_group_id" { type = string }
 variable "db_name" { type = string }
-variable "db_username" { type = string }
+variable "db_password" {
+  type        = string
+  sensitive   = true
+  description = "RDS password"
+}
 variable "db_password" { type = string }
 variable "db_instance_class" { type = string }
 variable "allocated_storage" { type = number }
@@ -19,3 +23,9 @@ variable "kms_key_id" {
   default = null
 }
 variable "tags" { type = map(string) }
+
+variable "skip_final_snapshot" {
+  description = "Skip final snapshot on destroy (true for dev/demo)"
+  type        = bool
+  default     = false
+}
