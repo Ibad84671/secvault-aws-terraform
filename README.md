@@ -1,52 +1,85 @@
 # 🛡️ SecVault - Enterprise AWS 3-Tier Architecture via Terraform
 
-Automated, highly available, and secure 3-Tier AWS infrastructure deployment using modular Terraform and Python.
+[![Terraform CI/Validation](https://github.com/Ibad84671/secvault-aws-terraform/actions/workflows/terraform-ci.yml/badge.svg)](https://github.com/Ibad84671/secvault-aws-terraform/actions/workflows/terraform-ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![AWS](https://img.shields.io/badge/Cloud-AWS-orange?logo=amazon-aws)](https://aws.amazon.com/)
+
+Production-grade, highly available, and secure 3-Tier cloud infrastructure deployed on AWS using modular Terraform (Infrastructure as Code) and automated through GitHub Actions CI/CD.
 
 ---
 
 ## 🏛️ Architecture Overview
 
-This repository provisions an enterprise-standard 3-tier cloud architecture on AWS using **Terraform (Infrastructure as Code)**. The application workload is isolated in private subnets, fronted by an Application Load Balancer (ALB), and backed by a relational database tier (Amazon RDS MySQL).
+The workload is isolated across multi-AZ private subnets, fronted by an Internet-facing Application Load Balancer (ALB), backed by an internal Auto Scaling Group (ASG) running Python Flask instances, and secured with a private MySQL RDS instance. Internet connectivity for private app instances is safely routed via a managed NAT Gateway.
 
 ```mermaid
 flowchart TD
     User([Internet User]) -->|HTTP :80| ALB[Application Load Balancer\nPublic Subnets]
 
-    subgraph VPC [Custom AWS VPC]
-        subgraph PublicSubnets [Public Subnets - Multi-AZ]
+    subgraph VPC [Custom AWS VPC - Multi-AZ]
+        subgraph PublicSubnets [Public Subnets]
             ALB
             IGW[Internet Gateway]
             NAT[NAT Gateway]
         end
 
-        subgraph PrivateAppSubnets [Private App Subnets - Multi-AZ]
-            ASG[Auto Scaling Group\nEC2 App Instances - Python Flask]
+        subgraph PrivateAppSubnets [Private App Subnets]
+            ASG[Auto Scaling Group\nEC2 Python Flask Instances]
         end
 
-        subgraph PrivateDBSubnets [Private DB Subnets - Multi-AZ]
+        subgraph PrivateDBSubnets [Private DB Subnets]
             RDS[(Amazon RDS MySQL\nPrimary DB)]
         end
     end
 
     ALB -->|Forward Traffic :5000| ASG
     ASG -->|Outbound DB Traffic :3306| RDS
-    ASG -->|Outbound Internet Updates| NAT --> IGW
+    ASG -->|Outbound Updates via NAT| NAT --> IGW
 ```
+
+---
+
+## 📂 Repository Structure
+
+The project follows a decoupled, reusable Terraform module structure:
+
+```
+secvault-aws-terraform/
+├── .github/
+│   └── workflows/
+│       └── terraform-ci.yml   # Automated format & validation pipeline
+├── app/
+│   └── app.py                 # Python Flask SOC Dashboard application
+├── modules/
+│   ├── alb/                   # Application Load Balancer & Target Groups
+│   ├── asg/                   # Launch Template, User-Data, and Auto Scaling
+│   ├── rds/                   # Multi-AZ RDS MySQL Database tier
+│   ├── security/              # Security Groups & least-privilege chaining
+│   └── vpc/                   # Custom VPC, Subnets, Internet & NAT Gateways
+├── main.tf                    # Root module composition
+├── variables.tf               # Root input variables (securely parameterized)
+├── outputs.tf                 # ALB DNS name & infrastructure outputs
+└── provider.tf                # AWS provider configuration & version locking
+```
+
+---
+
+## 🔒 Security & Best Practices Implemented
+
+- **Network Isolation:** Zero public exposure for App and Database tiers; hosted entirely inside private subnets.
+- **Security Group Chaining:** Strict ingress rules (ALB accepts HTTP from internet → App accepts port 5000 strictly from ALB → RDS accepts port 3306 strictly from App instances).
+- **Zero Secrets in Code:** Sensitive variables (`db_password`) are parameterized without hardcoded defaults; `.gitignore` properly tracks `.terraform.lock.hcl` while keeping local state and sensitive `tfvars` secure.
+- **Automated Governance:** GitHub Actions pipeline automatically validates and lints all infrastructure code on every pull request and push.
 
 ---
 
 ## 🚀 Step-by-Step Deployment Guide
 
-Follow these steps to deploy this 3-tier AWS architecture in your own AWS account using Terraform.
-
 ### 📋 Prerequisites
 
-Before you begin, ensure you have the following installed and configured:
-1. **AWS CLI** configured with your credentials (`aws configure`).
-2. **Terraform CLI** (v1.0+) installed.
-3. **Git** installed.
-
----
+- AWS CLI configured (`aws configure`) with appropriate permissions.
+- Terraform CLI (v1.0+) installed.
+- Git installed.
 
 ### 📥 1. Clone the Repository
 
@@ -55,55 +88,44 @@ git clone https://github.com/Ibad84671/secvault-aws-terraform.git
 cd secvault-aws-terraform
 ```
 
----
-
 ### ⚙️ 2. Configure Environment Variables
 
-Create a `terraform.tfvars` file in the root directory to supply your database secrets safely (do not commit this file):
+Create a `terraform.tfvars` file in the root directory to supply your database secrets safely:
 
 ```hcl
 db_username = "admin"
 db_password = "YourSecurePassword123!"
 ```
 
----
+### 🏗️ 3. Initialize & Deploy
 
-### 🏗️ 3. Initialize & Deploy Infrastructure
+```bash
+terraform init
+terraform validate
+terraform plan
+terraform apply
+```
 
-1. **Initialize Terraform working directory:**
-   ```bash
-   terraform init
-   ```
-
-2. **Validate configuration & check plan:**
-   ```bash
-   terraform validate
-   terraform plan
-   ```
-
-3. **Apply and provision resources on AWS:**
-   ```bash
-   terraform apply
-   ```
-   *(Type `yes` when prompted to confirm deployment)*
-
----
+(Type `yes` when prompted)
 
 ### 🌐 4. Access the Application
 
-Once `terraform apply` finishes, copy the `alb_dns_name` output from your terminal and open it in your web browser:
+Once deployment completes, copy the output `alb_dns_name` and open it in your browser:
 
-```text
+```
 http://<alb_dns_name>
 ```
 
----
+### 🧹 5. Clean Up (Destroy Infrastructure)
 
-### 🧹 5. Destroy & Clean Up Resources
-
-To avoid ongoing AWS charges after testing, destroy all provisioned infrastructure:
+To avoid ongoing AWS charges:
 
 ```bash
 terraform destroy
 ```
-*(Type `yes` when prompted to confirm cleanup)*
+
+---
+
+## 📜 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
