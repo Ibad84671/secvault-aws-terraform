@@ -29,6 +29,11 @@ resource "aws_launch_template" "app" {
               mkdir -p /home/ec2-user/app
               cd /home/ec2-user/app
 
+              # Clone repository to fetch the Flask application files
+              git clone https://github.com/Ibad84671/secvault-aws-terraform.git /tmp/repo
+              cp -r /tmp/repo/app/* /home/ec2-user/app/
+              chown -R ec2-user:ec2-user /home/ec2-user/app
+
               # Set environment variables for RDS connection
               export DB_HOST="${var.db_host}"
               export DB_USER="${var.db_user}"
@@ -60,6 +65,7 @@ resource "aws_launch_template" "app" {
 
               systemctl daemon-reload
               systemctl enable secvault
+              systemctl start secvault
               EOF
   )
 
