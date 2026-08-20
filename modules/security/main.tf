@@ -1,67 +1,95 @@
-# ALB Security Group
 resource "aws_security_group" "alb" {
   name_prefix = "${var.project_name}-alb-sg-"
-  description = "ALB security group"
+  description = "Ingress to the public Application Load Balancer."
   vpc_id      = var.vpc_id
 
   ingress {
+    description = "HTTP from the public internet"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTP from internet"
   }
+
   ingress {
+    description = "HTTPS from the public internet"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
-    description = "HTTPS from internet"
   }
+
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "Forward application traffic only to the app tier"
+    from_port       = 5000
+    to_port         = 5000
+    protocol        = "tcp"
+    security_groups = [aws_security_group.app.id]
   }
+
   tags = merge(var.tags, { Name = "${var.project_name}-alb-sg" })
 }
 
-# ─── APP SECURITY GROUP (NO SSH) ───
 resource "aws_security_group" "app" {
   name_prefix = "${var.project_name}-app-sg-"
-  description = "App tier security group"
+  description = "Private application tier; no direct administrative ingress."
   vpc_id      = var.vpc_id
 
   ingress {
+    description     = "Application traffic from ALB only"
     from_port       = 5000
     to_port         = 5000
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
-    description     = "HTTP from ALB"
   }
-  # ❌ NO SSH RULE – Use SSM Session Manager
+
   egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
+    description = "HTTPS for package updates and AWS APIs through NAT"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  egress {
+    description     = "MySQL to the database tier"
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_security_group.db.id]
+  }
+
+  egress {
+    description = "VPC DNS over UDP"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "udp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    description = "VPC DNS over TCP"
+    from_port   = 53
+    to_port     = 53
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
   tags = merge(var.tags, { Name = "${var.project_name}-app-sg" })
 }
 
-# ─── DB SECURITY GROUP ───
 resource "aws_security_group" "db" {
   name_prefix = "${var.project_name}-db-sg-"
-  description = "DB security group"
+  description = "Private MySQL tier; accepts traffic only from the app tier."
   vpc_id      = var.vpc_id
 
   ingress {
+    description     = "MySQL from application tier only"
     from_port       = 3306
     to_port         = 3306
     protocol        = "tcp"
     security_groups = [aws_security_group.app.id]
-    description     = "MySQL from app tier"
   }
+
   tags = merge(var.tags, { Name = "${var.project_name}-db-sg" })
 }

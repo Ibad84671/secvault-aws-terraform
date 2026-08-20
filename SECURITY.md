@@ -1,32 +1,34 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-| Version | Supported |
-|---------|-----------|
-| 1.x     | ✅ |
+The `main` branch is the actively maintained version of SecVault. Feature branches are considered development work and may contain incomplete security controls.
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-**Security is a top priority.** If you discover a vulnerability:
+Please do not disclose exploitable security issues in a public GitHub issue.
 
-1. **DO NOT** create a public GitHub issue
-2. Email: [ibad84671@gmail.com](mailto:ibad84671@gmail.com)
-3. Include: Description, Steps to Reproduce, Potential Impact
-4. Expect response within 48 hours
+Use GitHub's private vulnerability reporting/security advisory workflow for this repository when available. Include:
 
-## Security Controls in Place
+- affected file/resource
+- impact and attack path
+- reproduction steps that do not expose real credentials
+- suggested remediation, if known
 
-- ✅ **Secrets Manager** – DB credentials never in code or user_data
-- ✅ **SSM Session Manager** – No SSH, no public port 22
-- ✅ **Security Group Chaining** – ALB SG → App SG → DB SG
-- ✅ **Private Subnets** – App & DB tiers have no public IPs
-- ✅ **Encryption at Rest** – RDS encrypted with KMS
-- ✅ **IMDSv2** – Enforced on EC2 instances
-- ✅ **Terraform Security Scanning** – Checkov + tfsec in CI pipeline
+## Secret handling
 
-## Security Architecture
+Never commit:
 
-## Responsible Disclosure
+- AWS access keys
+- secret keys
+- database passwords
+- API tokens
+- private keys
+- Terraform state files
+- production `.tfvars` files
 
-We follow responsible disclosure practices. Vulnerabilities are fixed within 14 days of confirmation.
+SecVault intentionally uses RDS-managed Secrets Manager credentials for the database password. If a secret is accidentally committed, revoke/rotate it immediately; deleting the Git commit alone is not sufficient.
+
+## Security philosophy
+
+SecVault follows defense-in-depth and least-privilege principles. It is not represented as a guarantee of complete security, compliance, or immunity from compromise.

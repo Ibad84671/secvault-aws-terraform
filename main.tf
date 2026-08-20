@@ -1,85 +1,109 @@
 terraform {
-  required_version = ">= 1.0"
+  required_version = ">= 1.11.0, < 2.0.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 5.0"
+      version = "~> 5.100"
     }
   }
 }
 
 provider "aws" {
   region = var.aws_region
+
   default_tags {
-    tags = var.tags
+    tags = local.common_tags
   }
 }
 
-# ─── VPC MODULE ───
+locals {
+  common_tags = merge(var.tags, {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  })
+}
+
 module "vpc" {
   source = "./modules/vpc"
 
   project_name        = var.project_name
   vpc_cidr            = var.vpc_cidr
-  public_subnet_cidrs = var.public_subnet_cidrs # ← Must match variable name
-  app_subnet_cidrs    = var.app_subnet_cidrs    # ← Must match
-  db_subnet_cidrs     = var.db_subnet_cidrs     # ← Must match
-  availability_zones  = var.availability_zones  # ← Must match
-  tags                = var.tags
+  public_subnet_cidrs = var.public_subnet_cidrs
+  app_subnet_cidrs    = var.app_subnet_cidrs
+  db_subnet_cidrs     = var.db_subnet_cidrs
+  availability_zones  = var.availability_zones
+  single_nat_gateway  = var.single_nat_gateway
+  tags                = local.common_tags
 }
 
-# ─── SECURITY MODULE ───
 module "security" {
   source = "./modules/security"
 
   project_name = var.project_name
   vpc_id       = module.vpc.vpc_id
-  tags         = var.tags
+  vpc_cidr     = var.vpc_cidr
+  tags         = local.common_tags
 }
 
-# --- RDS MODULE ---
 module "rds" {
   source = "./modules/rds"
 
   project_name            = var.project_name
-  db_subnet_ids           = module.vpc.db_subnet_ids             # ← This must match VPC output
-  db_security_group_id    = module.security.db_security_group_id # ← This must match Security output
+  db_subnet_ids           = module.vpc.db_subnet_ids
+  db_security_group_id    = module.security.db_security_group_id
   db_name                 = var.db_name
   db_username             = var.db_username
-  db_password             = var.db_password
   db_instance_class       = var.db_instance_class
-  allocated_storage       = 20
-  backup_retention_period = 7
-  multi_az                = false
-  skip_final_snapshot     = true
-  tags                    = var.tags
+  allocated_storage       = var.allocated_storage
+  backup_retention_period = var.backup_retention_period
+  multi_az                = var.multi_az
+  deletion_protection     = var.deletion_protection
+  skip_final_snapshot     = var.skip_final_snapshot
+  tags                    = local.common_tags
 }
-# --- ALB MODULE ---
+
+module "observability" {
+  source = "./modules/observability"
+
+  project_name              = var.project_name
+  environment               = var.environment
+  vpc_id                    = module.vpc.vpc_id
+  enable_guardduty          = var.enable_guardduty
+  enable_security_hub       = var.enable_security_hub
+  alert_email               = var.security_alert_email
+  cloudtrail_retention_days = var.cloudtrail_retention_days
+  tags                      = local.common_tags
+}
+
 module "alb" {
   source = "./modules/alb"
 
   project_name      = var.project_name
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
-  alb_sg_id         = module.security.alb_security_group_id # ← Match Security output
-  tags              = var.tags
+  alb_sg_id         = module.security.alb_security_group_id
+  access_log_bucket = module.observability.cloudtrail_bucket_name
+  certificate_arn   = var.alb_certificate_arn
+  tags              = local.common_tags
 }
 
-# ─── ASG MODULE ───
 module "asg" {
   source = "./modules/asg"
 
   project_name          = var.project_name
   app_subnet_ids        = module.vpc.app_subnet_ids
-  app_security_group_id = module.security.app_security_group_id # ← Match Security output
+  app_security_group_id = module.security.app_security_group_id
   alb_target_group_arn  = module.alb.target_group_arn
-  instance_type         = "t3.micro"
-  min_size              = 1
-  max_size              = 2
-  desired_capacity      = 1
-  db_host               = module.rds.db_host
-  db_user               = var.db_username
-  db_password           = var.db_password
+  instance_type         = var.instance_type
+  min_size              = var.min_size
+  max_size              = var.max_size
+  desired_capacity      = var.desired_capacity
+  db_secret_arn         = module.rds.master_user_secret_arn
+  db_secret_kms_key_arn = module.rds.db_kms_key_arn
   db_name               = var.db_name
-  tags                  = var.tags
+  app_repository        = var.app_repository
+  app_git_ref           = var.app_git_ref
+  tags                  = local.common_tags
 }

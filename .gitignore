@@ -5,6 +5,26 @@
 *.tfvars
 *.tfvars.json
 .terraform.tfstate.lock.info
+crash.log
+crash.*.log
+*.tfplan
+*.tfplan.json
+
+# Terraform CLI / provider credentials
+.terraformrc
+terraform.rc
+
+# Application secrets and local environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Scan artifacts
+checkov-results.sarif
+trivy-results.sarif
 
 # Local development
 *.log

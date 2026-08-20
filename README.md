@@ -1,405 +1,298 @@
-# 🛡️ SecVault - Enterprise AWS 3-Tier Architecture via Terraform
+# 🔐 SecVault
 
-[![Terraform CI/Validation](https://github.com/Ibad84671/secvault-aws-terraform/actions/workflows/terraform-ci.yml/badge.svg)](https://github.com/Ibad84671/secvault-aws-terraform/actions/workflows/terraform-ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![AWS](https://img.shields.io/badge/Cloud-AWS-orange?logo=amazon-aws)](https://aws.amazon.com/)
-[![Terraform](https://img.shields.io/badge/Terraform-1.6+-623ce4)](https://terraform.io)
+**Production-minded AWS security infrastructure engineered with Terraform.**
 
-Production-grade, highly available, and secure 3-Tier cloud infrastructure deployed on AWS using modular Terraform (Infrastructure as Code) and automated through GitHub Actions CI/CD.
+SecVault is a security-focused AWS 3-tier workload that demonstrates defense-in-depth across identity, network isolation, encryption, audit logging, threat detection, alerting, and Infrastructure as Code.
 
----
+> Security is treated as a system: prevent exposure, reduce privilege, capture evidence, detect meaningful events, and automate the response path.
 
-## 📋 Table of Contents
-
-- [Architecture Overview](#-architecture-overview)
-- [Repository Structure](#-repository-structure)
-- [Security & Best Practices](#-security--best-practices-implemented)
-- [Technology Stack](#-technology-stack)
-- [Deployment Guide](#-step-by-step-deployment-guide)
-- [Cost Estimation](#-cost-estimation)
-- [CI/CD Pipeline](#-cicd-pipeline)
-- [Testing & Validation](#-testing--validation)
-- [License](#-license)
+[![Terraform CI](https://github.com/Ibad84671/secvault-aws-terraform/actions/workflows/terraform-ci.yml/badge.svg)](https://github.com/Ibad84671/secvault-aws-terraform/actions/workflows/terraform-ci.yml)
+[![Terraform](https://img.shields.io/badge/Terraform-1.11%2B-623CE4?logo=terraform)](https://www.terraform.io/)
+[![AWS](https://img.shields.io/badge/AWS-Security-orange?logo=amazon-aws)](https://aws.amazon.com/security/)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
-## 🏛️ Architecture Overview
+## Why SecVault?
 
-The workload is isolated across multi-AZ private subnets, fronted by an Internet-facing Application Load Balancer (ALB), backed by an internal Auto Scaling Group (ASG) running Python Flask instances, and secured with a private MySQL RDS instance. Internet connectivity for private app instances is safely routed via a managed NAT Gateway.
+SecVault is intentionally more than a collection of AWS resources. It is an auditable security engineering exercise that connects controls to threats:
+
+- **Identity:** EC2 uses IAM roles and SSM instead of SSH keys.
+- **Network:** public ALB → private application tier → private RDS tier.
+- **Secrets:** RDS manages the master password in Secrets Manager; the password is never committed or templated into Terraform/user data.
+- **Encryption:** RDS and its managed secret use a customer-managed KMS key; audit logs use SSE-S3.
+- **Audit:** multi-region CloudTrail with log-file validation and protected S3 retention.
+- **Detection:** GuardDuty findings are routed through EventBridge.
+- **Monitoring:** VPC Flow Logs and RDS/EC2 CloudWatch metrics provide investigation signals.
+- **Alerting:** targeted IAM-change and security-finding events are delivered to an encrypted SNS topic.
+- **IaC security:** Terraform validation, Checkov, and Trivy run in GitHub Actions.
+
+## 🏗️ Architecture
 
 ```mermaid
-flowchart TD
-    User([Internet User]) -->|HTTP :80| ALB[Application Load Balancer\nPublic Subnets]
+flowchart TB
+    Internet((Internet))
 
-    subgraph VPC [Custom AWS VPC - Multi-AZ]
-        subgraph PublicSubnets [Public Subnets]
-            ALB
+    subgraph AWS["AWS Account / Deployment Region"]
+        subgraph VPC["SecVault VPC"]
             IGW[Internet Gateway]
-            NAT[NAT Gateway]
+            ALB[Public ALB\nHTTP or HTTPS]
+            NAT[NAT Gateway\n1 by default / 1 per AZ optional]
+
+            subgraph APP["Private Application Subnets"]
+                ASG[EC2 Auto Scaling Group\nAL2023 + SSM + IMDSv2]
+            end
+
+            subgraph DB["Private Database Subnets"]
+                RDS[(RDS MySQL\nEncrypted + private)]
+            end
+
+            Flow[VPC Flow Logs]
         end
 
-        subgraph PrivateAppSubnets [Private App Subnets]
-            ASG[Auto Scaling Group\nEC2 Python Flask Instances]
-        end
-
-        subgraph PrivateDBSubnets [Private DB Subnets]
-            RDS[(Amazon RDS MySQL\nPrimary DB)]
-        end
+        CT[CloudTrail\nMulti-region + validation]
+        Audit[(Private S3 Audit Bucket\nVersioned + retention)]
+        GD[GuardDuty]
+        SH[Security Hub\nOptional]
+        EB[EventBridge]
+        SNS[SNS Security Alerts]
+        CW[CloudWatch Logs / Metrics]
+        KMS[KMS Customer Key]
+        SM[Secrets Manager\nRDS-managed secret]
     end
 
-    ALB -->|Forward Traffic :5000| ASG
-    ASG -->|Outbound DB Traffic :3306| RDS
-    ASG -->|Outbound Updates via NAT| NAT --> IGW
+    Internet --> IGW --> ALB
+    ALB --> ASG
+    ASG --> RDS
+    ASG --> NAT --> IGW
+    ASG -. SSM .-> CW
+    Flow --> CW
+    CT --> Audit
+    CT --> EB
+    GD --> EB
+    SH -. optional .-> EB
+    EB --> SNS
+    RDS --> SM
+    KMS --> RDS
+    KMS --> SM
 ```
 
-### 🔄 Traffic Flow
+### Security event flow
 
-| Step | Source | Destination | Port | Direction |
-|------|--------|-------------|------|-----------|
-| 1 | Internet | Public ALB | 80 (HTTP) | Inbound |
-| 2 | Public ALB | App EC2 (ASG) | 5000 | Internal |
-| 3 | App EC2 | RDS MySQL | 3306 | Internal |
-| 4 | App EC2 | NAT Gateway | All | Outbound (Updates) |
+```mermaid
+sequenceDiagram
+    participant AWS as AWS service
+    participant CT as CloudTrail
+    participant EB as EventBridge
+    participant SNS as SNS
+    participant Sec as Security Engineer
 
-### 🏗️ Infrastructure Tiers
-
-| Tier | Service | Placement | Purpose |
-|------|---------|-----------|---------|
-| **Presentation** | Application Load Balancer | Public Subnets | Route external traffic to app tier |
-| **Application** | EC2 Auto Scaling Group | Private Subnets | Run Flask application, scale automatically |
-| **Data** | RDS MySQL | Private DB Subnets | Persistent data storage with Multi-AZ failover |
-| **Administration** | AWS Systems Manager (SSM) | Private Access | Secure remote access without SSH |
-
----
-
-## 📂 Repository Structure
-
-The project follows a decoupled, reusable Terraform module structure:
-
+    AWS->>CT: Management/security event
+    CT->>EB: Event available on default event bus
+    EB->>SNS: Match targeted security rule
+    SNS->>Sec: Email notification (when subscribed)
 ```
+
+### Traffic boundaries
+
+| Flow | Allowed path | Security boundary |
+|---|---|---|
+| Internet → application | ALB :80/:443 | ALB security group |
+| ALB → application | ALB SG → App SG :5000 | SG reference, no public app ingress |
+| Application → database | App SG → DB SG :3306 | SG reference |
+| Application → AWS/internet | Private subnet → NAT :443 | No public IP on app instances |
+| Administration | SSM Session Manager | No SSH ingress |
+
+## 🛡️ Implemented Security Controls
+
+| Area | Control | Evidence / purpose |
+|---|---|---|
+| Identity | EC2 IAM role | Short-lived instance credentials instead of static keys |
+| Administration | SSM Managed Instance Core | Removes SSH exposure and key distribution |
+| Network | Private app + DB subnets | Reduces direct attack surface |
+| Network | SG chaining | ALB → app → DB trust boundaries |
+| Compute | IMDSv2 required | Reduces credential theft through metadata SSRF paths |
+| Data | RDS private + encrypted | Protects database at rest and from public exposure |
+| Secrets | RDS-managed Secrets Manager secret | Removes plaintext DB password from code and user data |
+| Keys | Customer-managed KMS key | Encryption control and rotation for RDS/secret |
+| Audit | Multi-region CloudTrail | Captures management events, including global IAM activity |
+| Log protection | Private versioned S3 bucket | Audit evidence retention and transport protection |
+| Network telemetry | VPC Flow Logs | Investigates network behavior |
+| Threat detection | GuardDuty | Detects supported AWS threat signals |
+| Security posture | Security Hub (optional) | Optional CSPM/findings aggregation |
+| Alerting | EventBridge + SNS | Targeted notification path for high-value events |
+| IaC security | Checkov + Trivy | Detects Terraform/IaC regressions before merge |
+
+## 🔑 IAM Philosophy
+
+SecVault avoids application-level static AWS credentials. The EC2 role receives only:
+
+- AWS managed SSM instance-management permissions required for Session Manager.
+- `secretsmanager:GetSecretValue` on the single RDS-managed secret.
+- `kms:Decrypt` on the single database KMS key, constrained through the Secrets Manager service.
+
+The audit/flow-log service roles are similarly scoped to the exact resources they write to. Wildcards that are intrinsic to AWS service policies are kept narrow and documented rather than blindly removed.
+
+## 🧱 Terraform Structure
+
+```text
 secvault-aws-terraform/
-├── .github/
-│   └── workflows/
-│       └── terraform-ci.yml      # Automated format & validation pipeline
+├── .github/workflows/terraform-ci.yml
 ├── app/
-│   ├── app.py                    # Python Flask SOC Dashboard application
-│   └── templates/
-│       └── index.html             # Dark theme SOC dashboard UI
+│   ├── app.py
+│   ├── requirements.txt
+│   ├── schema.sql
+│   └── templates/index.html
+├── docs/
+│   ├── architecture.md
+│   ├── security-control-matrix.md
+│   └── threat-model.md
 ├── modules/
-│   ├── alb/                      # Application Load Balancer & Target Groups
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   ├── asg/                      # Launch Template, User-Data, and Auto Scaling
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   ├── rds/                      # Multi-AZ RDS MySQL Database tier
-│   │   ├── main.tf
-│   │   ├── variables.tf
-│   │   └── outputs.tf
-│   ├── security/                 # Security Groups & least-privilege chaining
-│   │   ├── main.tf
-│   │   └── outputs.tf
-│   └── vpc/                      # Custom VPC, Subnets, Internet & NAT Gateways
-│       ├── main.tf
-│       ├── variables.tf
-│       └── outputs.tf
-├── main.tf                       # Root module composition
-├── variables.tf                  # Root input variables (securely parameterized)
-├── outputs.tf                    # ALB DNS name & infrastructure outputs
-├── provider.tf                   # AWS provider configuration & version locking
-├── LICENSE                       # MIT License
-├── SECURITY.md                   # Security reporting guidelines
-├── CONTRIBUTING.md               # Contribution guidelines
-└── README.md                     # This file
+│   ├── alb/
+│   ├── asg/
+│   ├── observability/
+│   ├── rds/
+│   ├── security/
+│   └── vpc/
+├── main.tf
+├── variables.tf
+├── outputs.tf
+├── terraform.tfvars.example
+├── SECURITY.md
+├── CONTRIBUTING.md
+├── CHANGELOG.md
+└── README.md
 ```
 
----
+## 🚀 Deployment
 
-## 🔒 Security & Best Practices Implemented
+### Prerequisites
 
-| Category | Implementation |
-|----------|----------------|
-| **Network Isolation** | App and Database tiers in private subnets with no public IPs |
-| **Security Group Chaining** | ALB SG → App SG → DB SG (no CIDR-based trust) |
-| **Secrets Management** | AWS Secrets Manager for DB credentials (zero secrets in code) |
-| **Access Control** | AWS SSM Session Manager instead of SSH (no port 22 open) |
-| **Encryption** | RDS storage encrypted with KMS |
-| **IMDSv2** | Enforced on EC2 instances to prevent SSRF attacks |
-| **Infrastructure as Code** | All resources defined in Terraform – auditable and version-controlled |
-| **CI/CD Security Scanning** | Checkov + tfsec scan every PR for security misconfigurations |
-| **Backup** | RDS automated backups with 7-day retention |
+- AWS CLI with permissions to provision the resources in this repository.
+- Terraform 1.11+.
+- An AWS account where GuardDuty is allowed to be enabled in the target region.
 
-### 🔐 Security Group Flow
-
-```
-Internet
-    │
-    ▼
-┌─────────────────────────────────────┐
-│ ALB Security Group                  │
-│ ────────────────────────────        │
-│ 🔓 Port 80, 443 – From Anywhere    │
-└──────────────┬──────────────────────┘
-               │
-               │ Reference by SG ID
-               │
-┌──────────────▼──────────────────────┐
-│ App Security Group                  │
-│ ────────────────────────────        │
-│ 🔒 Port 5000 – From ALB SG only    │
-│ 🔒 Port 22 – CLOSED (SSM only)     │
-└──────────────┬──────────────────────┘
-               │
-               │ Reference by SG ID
-               │
-┌──────────────▼──────────────────────┐
-│ DB Security Group                   │
-│ ────────────────────────────        │
-│ 🔒 Port 3306 – From App SG only    │
-└─────────────────────────────────────┘
-```
-
----
-
-## 🛠️ Technology Stack
-
-| Component | Technology | Version |
-|-----------|------------|---------|
-| **Infrastructure** | Terraform | 1.6+ |
-| **Cloud Provider** | AWS | - |
-| **Compute** | EC2 Auto Scaling Group | t3.micro |
-| **Load Balancer** | Application Load Balancer | - |
-| **Database** | RDS MySQL | 8.0 |
-| **Application** | Python Flask + Gunicorn | 3.0+ |
-| **CI/CD** | GitHub Actions | - |
-| **Security Scanning** | Checkov, tfsec | - |
-| **Monitoring** | CloudWatch Logs + Alarms | - |
-| **Secrets** | AWS Secrets Manager | - |
-
----
-
-## 🚀 Step-by-Step Deployment Guide
-
-### 📋 Prerequisites
-
-- AWS CLI configured (`aws configure`) with appropriate IAM permissions
-- Terraform CLI (v1.0+) installed
-- Git installed
-
-### 📥 1. Clone the Repository
+### 1. Configure variables
 
 ```bash
-git clone https://github.com/Ibad84671/secvault-aws-terraform.git
-cd secvault-aws-terraform
+cp terraform.tfvars.example terraform.tfvars
 ```
 
-### ⚙️ 2. Configure Environment Variables
+The database password is intentionally **not** a variable. RDS generates and manages it in Secrets Manager.
 
-Create a `terraform.tfvars` file in the root directory:
-
-```hcl
-# terraform.tfvars
-aws_region          = "us-east-1"
-environment         = "prod"
-project_name        = "secvault"
-db_username         = "dbadmin"
-db_password         = "YourSecurePassword123!"  # Use a strong password
-```
-
-### 🏗️ 3. Initialize & Deploy
+### 2. Initialize and validate
 
 ```bash
 terraform init
+terraform fmt -check -recursive
 terraform validate
+```
+
+### 3. Review the plan
+
+```bash
 terraform plan
+```
+
+For production, use a protected remote state backend (for example, encrypted S3 with the current Terraform state-locking approach) rather than local state.
+
+### 4. Apply
+
+```bash
 terraform apply
 ```
 
-> Type `yes` when prompted to confirm deployment.
+If `security_alert_email` is configured, confirm the SNS subscription email after apply.
 
-### 🌐 4. Access the Application
-
-Once deployment completes, get the ALB DNS name:
+### 5. Inspect outputs
 
 ```bash
 terraform output alb_dns_name
+terraform output cloudtrail_bucket_name
+terraform output security_alert_topic_arn
 ```
 
-Open the URL in your browser:
-```
-http://<alb_dns_name>
+### HTTPS
+
+Set `alb_certificate_arn` to an ACM certificate in the same region. SecVault then creates an HTTPS listener and redirects HTTP to HTTPS. Without a certificate, HTTP remains enabled for demo accessibility; this is an explicit deployment choice, not a claim that plaintext HTTP is preferred.
+
+## 🧪 Validation & Security Scanning
+
+Local checks:
+
+```bash
+terraform fmt -check -recursive
+terraform init -backend=false
+terraform validate
 ```
 
-### 🧹 5. Clean Up (Destroy Infrastructure)
+Security scanners:
 
-To avoid ongoing AWS charges:
+```bash
+checkov -d . --framework terraform
+trivy config .
+```
+
+GitHub Actions runs formatting, validation, Checkov, Trivy, and an optional Terraform plan when an AWS OIDC plan role is configured as the repository variable `AWS_PLAN_ROLE_ARN`.
+
+The security scanners are configured as advisory in CI so a newly introduced scanner rule does not silently block infrastructure delivery. Findings are uploaded to GitHub Code Scanning and must be reviewed; this is intentionally different from suppressing findings.
+
+## 🔄 Drift Detection
+
+The weekly workflow execution provides a recurring validation point. For full remote-state drift detection, configure `AWS_PLAN_ROLE_ARN` with a read-only planning role and a protected remote state backend. A scheduled `terraform plan` can then compare declared infrastructure with the AWS account without automatically applying changes.
+
+## 💰 Cost Awareness
+
+SecVault is not a free infrastructure stack by definition. Typical cost drivers include:
+
+- NAT Gateway data processing and hourly charges.
+- Application Load Balancer hourly/L7 processing charges.
+- RDS instance/storage/backups.
+- GuardDuty and optional Security Hub usage.
+- CloudTrail management/data-event logging and S3 storage.
+- CloudWatch Logs and VPC Flow Logs.
+- KMS requests and customer-managed key lifecycle.
+
+The default single NAT Gateway is a deliberate development cost optimization. Set `single_nat_gateway = false` for a more resilient multi-AZ NAT design.
+
+## 🧹 Cleanup
+
+For a development environment:
 
 ```bash
 terraform destroy
 ```
 
-> Type `yes` when prompted.
+The audit bucket defaults to `force_destroy = false` so Terraform does not silently erase collected audit evidence. Empty the bucket deliberately or enable the module's `force_destroy_log_bucket` option only when destroying a disposable environment.
 
----
+## ⚠️ Important Limitations
 
-## 💰 Cost Estimation (us-east-1, On-Demand)
+SecVault is **production-minded**, not a guarantee of production security.
 
-| Resource | Approx. Monthly |
-|----------|-----------------|
-| 2× Public Subnet + IGW | Free |
-| NAT Gateway | ~$32 |
-| ALB | ~$25 |
-| EC2 (2× t3.micro, spot mix) | ~$8–15 |
-| RDS MySQL (db.t3.micro) | ~$30–60 |
-| Secrets Manager | ~$2 |
-| Data Transfer | ~$2–5 |
-| **Total (Single-AZ)** | **~$100–120** |
-| **Total (Multi-AZ)** | **~$150–180** |
+- A single AWS account and region deployment is not an organization-wide security boundary.
+- GuardDuty and Security Hub are region/account-aware; organization-level administration is outside this stack.
+- The application bootstrap uses the RDS master secret to initialize the demo schema. A larger production system should use a dedicated migration identity and a separate least-privilege runtime database user.
+- HTTP is intentionally retained when no ACM certificate is supplied.
+- Terraform state can contain sensitive infrastructure metadata; protect the backend and state access accordingly.
+- Security controls reduce risk; they do not make an AWS environment “fully secure” or “unhackable.”
 
----
+## 📚 Security Documentation
 
-## ⚙️ CI/CD Pipeline
+- [Threat Model](docs/threat-model.md)
+- [Security Control Matrix](docs/security-control-matrix.md)
+- [Architecture Notes](docs/architecture.md)
+- [Security Policy](SECURITY.md)
+- [Contribution Guide](CONTRIBUTING.md)
 
-The repository includes GitHub Actions workflows that automatically:
+## 🗺️ Roadmap
 
-| Trigger | Action |
-|---------|--------|
-| **Pull Request** | `terraform fmt -check`, `terraform validate`, `terraform plan`, Checkov, tfsec |
-| **Push to main** | `terraform fmt`, `validate`, `plan`, `apply` (after manual approval) |
-| **Scheduled** | Weekly security scan & drift detection |
+- [ ] Dedicated least-privilege application DB user and automated migrations
+- [ ] Organization-level security baseline for multi-account AWS
+- [ ] Optional private VPC endpoints for AWS APIs
+- [ ] Centralized cross-account security log archive
+- [ ] Automated policy regression tests for IAM and network boundaries
+- [ ] Production remote-state bootstrap module
 
-### Workflow File: `.github/workflows/terraform-ci.yml`
+## License
 
-```yaml
-name: Terraform CI/CD Pipeline
-
-on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-
-jobs:
-  terraform-validate:
-    name: 🔍 Terraform Validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.0
-      - name: Terraform Init
-        run: terraform init
-      - name: Terraform Validate
-        run: terraform validate
-      - name: Terraform Fmt Check
-        run: terraform fmt -check
-
-  security-scan:
-    name: 🛡️ Security Scanning
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run Checkov
-        uses: bridgecrewio/checkov-action@master
-        with:
-          directory: ./
-          framework: terraform
-          output_format: sarif
-      - name: Run tfsec
-        uses: aquasecurity/tfsec-sarif-action@v0.1.4
-        with:
-          sarif_file: tfsec-results.sarif
-      - name: Upload SARIF to GitHub
-        uses: github/codeql-action/upload-sarif@v3
-        with:
-          sarif_file: checkov-results.sarif
-
-  terraform-plan:
-    name: 📝 Terraform Plan
-    runs-on: ubuntu-latest
-    needs: [terraform-validate, security-scan]
-    if: github.event_name == 'pull_request'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.0
-      - name: Terraform Init
-        run: terraform init
-      - name: Terraform Plan
-        run: terraform plan -out=tfplan
-        env:
-          TF_VAR_db_password: ${{ secrets.TF_VAR_DB_PASSWORD }}
-```
-
----
-
-## 🧪 Testing & Validation
-
-### Validate Infrastructure
-
-```bash
-terraform validate
-terraform fmt -check
-```
-
-### Security Scanning
-
-```bash
-# Install Checkov
-pip install checkov
-checkov -d ./
-
-# Install tfsec
-brew install tfsec  # macOS
-# OR download from: https://github.com/aquasecurity/tfsec
-tfsec .
-```
-
-### Application Health Check
-
-```bash
-curl http://<alb_dns_name>/health
-```
-
-Expected response:
-```json
-{"status":"healthy","tier":"application","timestamp":"2024-...Z"}
-```
-
----
-
-## 📊 Project Status
-
-| Metric | Status |
-|--------|--------|
-| Code Quality | ✅ Validated |
-| Security Scanning | ✅ Passed |
-| CI/CD Pipeline | ✅ Configured |
-| Documentation | ✅ Complete |
-| Cost Optimized | ✅ Yes |
-
----
-
-## 📜 License
-
-Distributed under the MIT License. See `LICENSE` for more information.
-
----
-
-## 🤝 Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
-
----
-
-## 🔒 Security
-
-Please read [SECURITY.md](SECURITY.md) for details on reporting security vulnerabilities.
-
----
-
-**Made with ❤️ by Ibad**"" 
+MIT — see [LICENSE](LICENSE).
