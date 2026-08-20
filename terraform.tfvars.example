@@ -1,9 +1,20 @@
-# Copy this file to terraform.tfvars and fill values
+# Copy to terraform.tfvars for local development.
+# Do not commit terraform.tfvars. The RDS password is generated and managed by RDS/Secrets Manager.
+
 aws_region   = "us-east-1"
 environment  = "dev"
 project_name = "secvault"
 
-# ─── Database (CHANGE THESE!) ───
-db_password = "YourSecurePassword123!"
-db_username = "dbadmin"
-db_name     = "secvault"
+# Optional HTTPS. Supply an ACM certificate ARN to enable HTTPS and redirect HTTP to HTTPS.
+# alb_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/replace-me"
+
+# Cost / resilience trade-off.
+single_nat_gateway = true
+delection_protection = false
+multi_az = false
+
+# Optional security alert subscription. SNS will send a confirmation email.
+# security_alert_email = "security@example.com"
+
+enable_guardduty    = true
+enable_security_hub = false

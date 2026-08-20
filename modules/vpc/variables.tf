@@ -1,27 +1,40 @@
 variable "project_name" {
-  type = string
+  description = "Project identifier used in resource names."
+  type        = string
 }
 
 variable "vpc_cidr" {
-  type = string
+  description = "VPC CIDR block."
+  type        = string
 }
 
 variable "public_subnet_cidrs" {
-  type = list(string)
+  description = "Public subnet CIDRs."
+  type        = list(string)
 }
 
 variable "app_subnet_cidrs" {
-  type = list(string)
+  description = "Private application subnet CIDRs."
+  type        = list(string)
 }
 
 variable "db_subnet_cidrs" {
-  type = list(string)
+  description = "Private database subnet CIDRs."
+  type        = list(string)
 }
 
 variable "availability_zones" {
-  type = list(string)
+  description = "Availability zones aligned by subnet index."
+  type        = list(string)
+}
+
+variable "single_nat_gateway" {
+  description = "Use one shared NAT Gateway instead of one per AZ."
+  type        = bool
+  default     = true
 }
 
 variable "tags" {
-  type = map(string)
+  description = "Common resource tags."
+  type        = map(string)
 }

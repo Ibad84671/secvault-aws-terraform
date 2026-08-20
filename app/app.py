@@ -1,22 +1,45 @@
 #!/usr/bin/env python3
 import os
-import json
-import uuid
-from datetime import datetime
-from flask import Flask, request, jsonify, render_template_string
+from datetime import datetime, timezone
+
 import pymysql
+from flask import Flask, jsonify, render_template
 from pymysql import MySQLError
 
 app = Flask(__name__)
+app.config.update(
+    JSON_SORT_KEYS=False,
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+)
 
-# ─── Environment ──────────────────────────────────────────────────────────────
-DB_HOST     = os.environ.get('DB_HOST', 'localhost')
-DB_USER     = os.environ.get('DB_USER', 'admin')
-DB_PASSWORD = os.environ.get('DB_PASSWORD', '')
-DB_NAME     = os.environ.get('DB_NAME', 'secvault')
-MOCK_MODE   = os.environ.get('MOCK_MODE', 'false').lower() == 'true'
+DB_HOST = os.environ.get("DB_HOST", "localhost")
+DB_USER = os.environ.get("DB_USER", "secvault")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "")
+DB_NAME = os.environ.get("DB_NAME", "secvault")
+MOCK_MODE = os.environ.get("MOCK_MODE", "false").lower() == "true"
 
-# ─── Database helpers ─────────────────────────────────────────────────────────
+MOCK_EVENTS = [
+    {
+        "id": 1,
+        "event_id": "SEC-MOCK-1",
+        "severity": "High",
+        "source": "demo",
+        "type": "ExampleFinding",
+        "title": "Demo finding (MOCK_MODE only)",
+        "description": "Synthetic data is enabled explicitly for local UI development.",
+        "source_ip": "203.0.113.10",
+        "username": "demo-user",
+        "created_at": "2026-01-01T12:00:00Z",
+    }
+]
+
+
+def utc_now():
+    return datetime.now(timezone.utc).isoformat()
+
+
 def get_db_connection():
     try:
         return pymysql.connect(
@@ -24,137 +47,88 @@ def get_db_connection():
             user=DB_USER,
             password=DB_PASSWORD,
             database=DB_NAME,
-            charset='utf8mb4',
+            charset="utf8mb4",
             connect_timeout=5,
             autocommit=True,
-            cursorclass=pymysql.cursors.DictCursor
+            cursorclass=pymysql.cursors.DictCursor,
         )
-    except MySQLError as e:
-        app.logger.error(f"DB connection failed: {e}")
+    except MySQLError as exc:
+        app.logger.error("Database connection failed: %s", exc)
         return None
 
-def init_db():
+
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; "
+        "script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdn.jsdelivr.net; "
+        "font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; "
+        "img-src 'self' data:; "
+        "connect-src 'self' https://cdn.jsdelivr.net; "
+        "object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+    )
+    return response
+
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify({
+        "status": "healthy",
+        "tier": "application",
+        "timestamp": utc_now(),
+    }), 200
+
+
+@app.route("/", methods=["GET"])
+def index():
+    return render_template("index.html", mock_mode=MOCK_MODE)
+
+
+@app.route("/api/events", methods=["GET"])
+def events():
     conn = get_db_connection()
-    if not conn:
-        return
+    if conn is None:
+        if MOCK_MODE:
+            return jsonify({"source": "mock", "count": len(MOCK_EVENTS), "events": MOCK_EVENTS}), 200
+        return jsonify({"error": "Security event store unavailable"}), 503
+
     try:
         with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS security_events (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    event_id VARCHAR(36) NOT NULL,
-                    severity VARCHAR(20) NOT NULL,
-                    source VARCHAR(50),
-                    type VARCHAR(50),
-                    title VARCHAR(255),
-                    description TEXT,
-                    source_ip VARCHAR(45),
-                    username VARCHAR(50),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
+            cur.execute(
+                """
+                SELECT id, event_id, severity, source, type, title,
+                       description, source_ip, username, created_at
+                FROM security_events
+                ORDER BY created_at DESC
+                LIMIT 100
+                """
+            )
+            rows = cur.fetchall()
+        response = jsonify({"source": "rds", "count": len(rows), "events": rows})
+        response.headers["Cache-Control"] = "no-store"
+        return response, 200
+    except MySQLError as exc:
+        app.logger.error("Database read failed: %s", exc)
+        return jsonify({"error": "Security event store unavailable"}), 503
+    finally:
         conn.close()
-        print("✅ Database table verified/created.")
-    except MySQLError as e:
-        print(f"❌ Table init failed: {e}")
 
-# ─── Mock fallback data ──────────────────────────────────────────────────────
-MOCK_EVENTS = [
-    {"id": 1, "event_id": "SEC-MOCK-1", "severity": "Critical", "source": "web",
-     "type": "SSH_Brute", "title": "Brute force from 10.0.0.5", "source_ip": "10.0.0.5",
-     "username": "root", "created_at": "2025-01-01T12:00:00Z"},
-    {"id": 2, "event_id": "SEC-MOCK-2", "severity": "High", "source": "api",
-     "type": "SQL_Injection", "title": "Possible SQLi in /login", "source_ip": "192.168.1.20",
-     "username": "api_user", "created_at": "2025-01-01T11:30:00Z"},
-]
 
-# ─── Routes ──────────────────────────────────────────────────────────────────
-@app.route('/health')
-def health():
-    return jsonify({"status": "healthy", "tier": "app", "timestamp": datetime.utcnow().isoformat() + "Z"}), 200
+@app.errorhandler(404)
+def not_found(_error):
+    return jsonify({"error": "Not found"}), 404
 
-@app.route('/')
-def index():
-    # Minimal dark dashboard – you can expand with Chart.js later
-    return render_template_string("""
-    <!DOCTYPE html>
-    <html><head><title>SecVault</title>
-    <style>body{background:#0d1117;color:#e6edf3;font-family:monospace;padding:20px;}
-    h1{color:#3fb950;}</style></head>
-    <body>
-        <h1>🔐 SecVault – SOC Dashboard</h1>
-        <p>RDS connected: {{ "✅" if db_ok else "❌ (using mock data)" }}</p>
-        <p><a href="/api/events">View all events (JSON)</a></p>
-    </body></html>
-    """, db_ok=not MOCK_MODE)
 
-@app.route('/api/events', methods=['GET', 'POST'])
-def handle_events():
-    if request.method == 'GET':
-        # Try RDS first
-        conn = get_db_connection()
-        if conn and not MOCK_MODE:
-            try:
-                with conn.cursor() as cur:
-                    cur.execute("SELECT * FROM security_events ORDER BY created_at DESC LIMIT 100")
-                    rows = cur.fetchall()
-                conn.close()
-                return jsonify({"source": "rds", "count": len(rows), "events": rows}), 200
-            except MySQLError as e:
-                app.logger.error(f"DB read error: {e}")
-        # Fallback to mock
-        return jsonify({"source": "mock", "count": len(MOCK_EVENTS), "events": MOCK_EVENTS}), 200
+@app.errorhandler(500)
+def internal_error(_error):
+    app.logger.exception("Unhandled application error")
+    return jsonify({"error": "Internal server error"}), 500
 
-    # POST – insert new event
-    data = request.get_json() or {}
-    # Validate / sanitize
-    severity = data.get('severity', 'Low')
-    if severity not in ('Critical', 'High', 'Medium', 'Low'):
-        severity = 'Low'
 
-    event_id = f"SEC-{uuid.uuid4().hex[:8].upper()}"
-
-    # Try RDS insert
-    conn = get_db_connection()
-    if conn and not MOCK_MODE:
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    INSERT INTO security_events
-                    (event_id, severity, source, type, title, description, source_ip, username)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                """, (
-                    event_id,
-                    severity,
-                    data.get('source', 'api'),
-                    data.get('type', 'Generic'),
-                    data.get('title', 'No title'),
-                    data.get('description', ''),
-                    data.get('source_ip', '0.0.0.0'),
-                    data.get('username', 'unknown')
-                ))
-            conn.close()
-            return jsonify({"status": "ok", "source": "rds", "event_id": event_id}), 201
-        except MySQLError as e:
-            app.logger.error(f"DB insert failed: {e}")
-
-    # Fallback insert to mock
-    mock_event = {
-        "id": len(MOCK_EVENTS) + 1,
-        "event_id": event_id,
-        "severity": severity,
-        "source": data.get('source', 'api'),
-        "type": data.get('type', 'Generic'),
-        "title": data.get('title', 'No title'),
-        "description": data.get('description', ''),
-        "source_ip": data.get('source_ip', '0.0.0.0'),
-        "username": data.get('username', 'unknown'),
-        "created_at": datetime.utcnow().isoformat() + 'Z'
-    }
-    MOCK_EVENTS.insert(0, mock_event)
-    return jsonify({"status": "ok", "source": "mock", "event_id": event_id}), 201
-
-# ─── Startup ──────────────────────────────────────────────────────────────────
-if __name__ == '__main__':
-    init_db()
-    app.run(host='0.0.0.0', port=5000, debug=False)
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=5000, debug=False)

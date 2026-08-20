@@ -1,15 +1,19 @@
 output "db_host" {
-  value = aws_db_instance.mysql.address
+  description = "RDS endpoint hostname."
+  value       = aws_db_instance.mysql.address
 }
 
-output "db_port" {
-  value = aws_db_instance.mysql.port
+output "db_security_group_id" {
+  description = "RDS security group ID."
+  value       = var.db_security_group_id
 }
 
-output "db_name" {
-  value = aws_db_instance.mysql.db_name
+output "master_user_secret_arn" {
+  description = "Secrets Manager ARN managed by RDS for the master credentials."
+  value       = aws_db_instance.mysql.master_user_secret[0].secret_arn
 }
 
-output "db_username" {
-  value = aws_db_instance.mysql.username
+output "db_kms_key_arn" {
+  description = "KMS key ARN used for RDS and the RDS-managed master secret."
+  value       = aws_kms_key.db.arn
 }
